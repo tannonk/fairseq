@@ -130,3 +130,8 @@ data-bin/
 
 # Experimental Folder
 experimental/*
+
+# user added
+apex/
+._*
+examples/translation/

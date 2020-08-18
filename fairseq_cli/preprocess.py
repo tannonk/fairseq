@@ -57,6 +57,7 @@ def main(args):
         return dest_path("dict", lang) + ".txt"
 
     def build_dictionary(filenames, src=False, tgt=False):
+        # bitwise XOR: results to true if one (and only one) of the operands (evaluates to) true.
         assert src ^ tgt
         return task.build_dictionary(
             filenames,

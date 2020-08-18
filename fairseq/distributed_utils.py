@@ -48,7 +48,8 @@ def infer_init_method(args, force_distributed=False):
             node_list = os.environ.get('SLURM_JOB_NODELIST')
         if node_list is not None:
             try:
-                hostnames = subprocess.check_output(['scontrol', 'show', 'hostnames', node_list])
+                hostnames = subprocess.check_output(
+                    ['scontrol', 'show', 'hostnames', node_list])
                 args.distributed_init_method = 'tcp://{host}:{port}'.format(
                     host=hostnames.split()[0].decode('utf-8'),
                     port=args.distributed_port,
@@ -81,13 +82,15 @@ def infer_init_method(args, force_distributed=False):
         # fallback for single node with multiple GPUs
         assert args.distributed_world_size <= torch.cuda.device_count()
         port = random.randint(10000, 20000)
-        args.distributed_init_method = 'tcp://localhost:{port}'.format(port=port)
+        args.distributed_init_method = 'tcp://localhost:{port}'.format(
+            port=port)
 
 
 def distributed_init(args):
     if not getattr(args, 'tpu', False):
         if torch.distributed.is_initialized():
-            warnings.warn('Distributed is already initialized, cannot initialize twice!')
+            warnings.warn(
+                'Distributed is already initialized, cannot initialize twice!')
         else:
             logger.info('distributed init (rank {}): {}'.format(
                 args.distributed_rank, args.distributed_init_method,
@@ -185,6 +188,9 @@ def call_main(args, main, **kwargs):
             nprocs=8,  # use all 8 TPU cores
         )
     else:
+        # import pdb
+        # pdb.set_trace()
+
         # single GPU main
         main(args, **kwargs)
 
@@ -241,7 +247,8 @@ def all_gather_list(data, group=None, max_size=16384):
     header_size = 4  # size of header that contains the length of the encoded data
     size = header_size + enc_size
     if size > max_size:
-        raise ValueError('encoded data size ({}) exceeds max_size ({})'.format(size, max_size))
+        raise ValueError(
+            'encoded data size ({}) exceeds max_size ({})'.format(size, max_size))
 
     header = struct.pack(">I", enc_size)
     cpu_buffer[:size] = torch.ByteTensor(list(header + enc))
@@ -255,9 +262,11 @@ def all_gather_list(data, group=None, max_size=16384):
         result = []
         for i in range(world_size):
             out_buffer = buffer[i * max_size:(i + 1) * max_size]
-            enc_size, = struct.unpack(">I", bytes(out_buffer[:header_size].tolist()))
+            enc_size, = struct.unpack(">I", bytes(
+                out_buffer[:header_size].tolist()))
             if enc_size > 0:
-                result.append(pickle.loads(bytes(out_buffer[header_size:header_size + enc_size].tolist())))
+                result.append(pickle.loads(
+                    bytes(out_buffer[header_size:header_size + enc_size].tolist())))
         return result
     except pickle.UnpicklingError:
         raise Exception(
