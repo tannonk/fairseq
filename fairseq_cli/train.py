@@ -67,7 +67,8 @@ def main(args):
     criterion = task.build_criterion(args)
     logger.info(model)
     logger.info(
-        "model {}, criterion {}".format(args.arch, criterion.__class__.__name__)
+        "model {}, criterion {}".format(
+            args.arch, criterion.__class__.__name__)
     )
     logger.info(
         "num. model params: {} (num. trained: {})".format(
@@ -200,7 +201,8 @@ def train(args, trainer, task, epoch_itr):
         log_interval=args.log_interval,
         epoch=epoch_itr.epoch,
         tensorboard_logdir=(
-            args.tensorboard_logdir if distributed_utils.is_master(args) else None
+            args.tensorboard_logdir if distributed_utils.is_master(
+                args) else None
         ),
         default_log_format=("tqdm" if not args.no_progress_bar else "simple"),
     )
@@ -220,7 +222,8 @@ def train(args, trainer, task, epoch_itr):
         # log mid-epoch stats
         num_updates = trainer.get_num_updates()
         if num_updates % args.log_interval == 0:
-            stats = get_training_stats(metrics.get_smoothed_values("train_inner"))
+            stats = get_training_stats(
+                metrics.get_smoothed_values("train_inner"))
             progress.log(stats, tag="train_inner", step=num_updates)
 
             # reset mid-epoch stats after each log interval
@@ -236,7 +239,8 @@ def train(args, trainer, task, epoch_itr):
             break
 
     # log end-of-epoch stats
-    logger.info("end of epoch {} (average epoch stats below)".format(epoch_itr.epoch))
+    logger.info(
+        "end of epoch {} (average epoch stats below)".format(epoch_itr.epoch))
     stats = get_training_stats(metrics.get_smoothed_values("train"))
     progress.print(stats, tag="train", step=num_updates)
 
@@ -276,7 +280,8 @@ def validate_and_save(args, trainer, task, epoch_itr, valid_subsets, end_of_epoc
     # Save checkpoint
     if do_save or should_stop:
         logger.info("begin save checkpoint")
-        checkpoint_utils.save_checkpoint(args, trainer, epoch_itr, valid_losses[0])
+        checkpoint_utils.save_checkpoint(
+            args, trainer, epoch_itr, valid_losses[0])
 
     return valid_losses, should_stop
 
@@ -308,9 +313,11 @@ def validate(args, trainer, task, epoch_itr, subsets):
             epoch=epoch_itr.epoch,
             prefix=f"valid on '{subset}' subset",
             tensorboard_logdir=(
-                args.tensorboard_logdir if distributed_utils.is_master(args) else None
+                args.tensorboard_logdir if distributed_utils.is_master(
+                    args) else None
             ),
-            default_log_format=("tqdm" if not args.no_progress_bar else "simple"),
+            default_log_format=(
+                "tqdm" if not args.no_progress_bar else "simple"),
         )
 
         # create a new root metrics aggregator so validation metrics
@@ -341,6 +348,10 @@ def get_valid_stats(args, trainer, stats):
 def cli_main(modify_parser=None):
     parser = options.get_training_parser()
     args = options.parse_args_and_arch(parser, modify_parser=modify_parser)
+
+    # import pdb
+    # pdb.set_trace()
+
     if args.profile:
         with torch.cuda.profiler.profile():
             with torch.autograd.profiler.emit_nvtx():
