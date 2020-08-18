@@ -110,7 +110,10 @@ def infer_init_method(cfg: DistributedTrainingConfig, force_distributed=False):
         if node_list is not None:
             try:
                 hostnames = subprocess.check_output(
-                    ["scontrol", "show", "hostnames", node_list]
+                    ['scontrol', 'show', 'hostnames', node_list])
+                args.distributed_init_method = 'tcp://{host}:{port}'.format(
+                    host=hostnames.split()[0].decode('utf-8'),
+                    port=args.distributed_port,
                 )
                 cfg.distributed_init_method = "tcp://{host}:{port}".format(
                     host=hostnames.split()[0].decode("utf-8"),
@@ -163,66 +166,18 @@ def infer_init_method(cfg: DistributedTrainingConfig, force_distributed=False):
         assert cfg.distributed_world_size <= torch.cuda.device_count(), \
             f"world size is {cfg.distributed_world_size} but have {torch.cuda.device_count()} available devices"
         port = random.randint(10000, 20000)
-        cfg.distributed_init_method = "tcp://localhost:{port}".format(port=port)
-
-    if cfg.pipeline_model_parallel:
-        if not cfg.distributed_no_spawn:
-            # When distributed_no_spawn is False, we expect distributed_rank and
-            # distributed_world_size to be based on the total number of GPUs, so
-            # we need to correct them to be based on the number of pipelines.
-            assert cfg.distributed_world_size % num_pipeline_devices == 0
-            cfg.distributed_world_size = (
-                cfg.distributed_world_size // num_pipeline_devices
-            )
-            # In the case of 4-way MP on nodes with 8 GPUs, we want
-            # distributed_rank to be the starting GPU index for each pipeline
-            # i.e., 0, 2, ...
-            assert cfg.distributed_rank % gpus_per_node == 0
-            assert cfg.distributed_rank % num_pipeline_devices == 0
-
-            with open_dict(cfg):
-                cfg.distributed_rank = cfg.distributed_rank // num_pipeline_devices
-                # launch one process per pipeline
-                cfg.distributed_num_procs = num_pipelines_per_node
-
-        # if we have 4-way MP on a node with 8 GPUs, we want device_ids to be 0
-        # and 4, indicating the starting device IDs for each pipeline
-        cfg.device_id *= num_pipeline_devices
-
-        if cfg.device_id > 0:
-            # if there's multiple pipelines on a node (e.g., 4-way MP on an 8
-            # GPU node), we need to adjust pipeline_devices accordingly
-            logger.debug(
-                "setting CUDA device={} on rank {}".format(
-                    cfg.device_id, cfg.distributed_rank
-                )
-            )
-            torch.cuda.set_device(cfg.device_id)
-            with open_dict(cfg):
-                cfg.pipeline_devices = [cfg.device_id + d for d in cfg.pipeline_devices]
-            logger.info(
-                "setting pipeline_devices={} on rank {}".format(
-                    cfg.pipeline_devices, cfg.distributed_rank
-                )
-            )
-    elif not cfg.distributed_no_spawn:
-        with open_dict(cfg):
-            cfg.distributed_num_procs = min(
-                torch.cuda.device_count(), cfg.distributed_world_size
-            )
-
+        args.distributed_init_method = 'tcp://localhost:{port}'.format(
+            port=port)
 
 def distributed_init(cfg: FairseqConfig):
     if isinstance(cfg, Namespace):
         from fairseq.dataclass.utils import convert_namespace_to_omegaconf
 
-        cfg = convert_namespace_to_omegaconf(cfg)
-
-    if not cfg.common.tpu:
-        if torch.distributed.is_available() and torch.distributed.is_initialized():
+def distributed_init(args):
+    if not getattr(args, 'tpu', False):
+        if torch.distributed.is_initialized():
             warnings.warn(
-                "Distributed is already initialized, cannot initialize twice!"
-            )
+                'Distributed is already initialized, cannot initialize twice!')
         else:
             logger.info(
                 "distributed init (rank {}): {}".format(
@@ -330,6 +285,9 @@ def call_main(cfg: FairseqConfig, main, **kwargs):
             nprocs=8,  # use all 8 TPU cores
         )
     else:
+        # import pdb
+        # pdb.set_trace()
+
         # single GPU main
         main(cfg, **kwargs)
 
@@ -553,8 +511,7 @@ def all_gather_list(data, group=None, max_size=16384):
     size = header_size + enc_size
     if size > max_size:
         raise ValueError(
-            "encoded data size ({}) exceeds max_size ({})".format(size, max_size)
-        )
+            'encoded data size ({}) exceeds max_size ({})'.format(size, max_size))
 
     header = struct.pack(">I", enc_size)
     cpu_buffer[:size] = torch.ByteTensor(list(header + enc))
@@ -567,14 +524,12 @@ def all_gather_list(data, group=None, max_size=16384):
     try:
         result = []
         for i in range(world_size):
-            out_buffer = buffer[i * max_size : (i + 1) * max_size]
-            (enc_size,) = struct.unpack(">I", bytes(out_buffer[:header_size].tolist()))
+            out_buffer = buffer[i * max_size:(i + 1) * max_size]
+            enc_size, = struct.unpack(">I", bytes(
+                out_buffer[:header_size].tolist()))
             if enc_size > 0:
-                result.append(
-                    pickle.loads(
-                        bytes(out_buffer[header_size : header_size + enc_size].tolist())
-                    )
-                )
+                result.append(pickle.loads(
+                    bytes(out_buffer[header_size:header_size + enc_size].tolist())))
         return result
     except pickle.UnpicklingError:
         raise Exception(

@@ -74,9 +74,10 @@ def main(cfg: DictConfig) -> None:
     model = task.build_model(cfg.model)
     criterion = task.build_criterion(cfg.criterion)
     logger.info(model)
-    logger.info("task: {}".format(task.__class__.__name__))
-    logger.info("model: {}".format(model.__class__.__name__))
-    logger.info("criterion: {})".format(criterion.__class__.__name__))
+    logger.info(
+        "model {}, criterion {}".format(
+            args.arch, criterion.__class__.__name__)
+    )
     logger.info(
         "num. model params: {} (num. trained: {})".format(
             sum(p.numel() for p in model.parameters()),
@@ -197,13 +198,8 @@ def train(
         log_interval=cfg.common.log_interval,
         epoch=epoch_itr.epoch,
         tensorboard_logdir=(
-            cfg.common.tensorboard_logdir
-            if distributed_utils.is_master(cfg.distributed_training)
-            else None
-        ),
-        default_log_format=("tqdm" if not cfg.common.no_progress_bar else "simple"),
-        wandb_project=(
-            cfg.common.wandb_project if distributed_utils.is_master(cfg.distributed_training) else None
+            args.tensorboard_logdir if distributed_utils.is_master(
+                args) else None
         ),
     )
 
@@ -218,12 +214,12 @@ def train(
         ):
             log_output = trainer.train_step(samples)
 
-        if log_output is not None:  # not OOM, overflow, ...
-            # log mid-epoch stats
-            num_updates = trainer.get_num_updates()
-            if num_updates % cfg.common.log_interval == 0:
-                stats = get_training_stats(metrics.get_smoothed_values("train_inner"))
-                progress.log(stats, tag="train_inner", step=num_updates)
+        # log mid-epoch stats
+        num_updates = trainer.get_num_updates()
+        if num_updates % args.log_interval == 0:
+            stats = get_training_stats(
+                metrics.get_smoothed_values("train_inner"))
+            progress.log(stats, tag="train_inner", step=num_updates)
 
                 # reset mid-epoch stats after each log interval
                 # the end-of-epoch stats will still be preserved
@@ -238,7 +234,8 @@ def train(
             break
 
     # log end-of-epoch stats
-    logger.info("end of epoch {} (average epoch stats below)".format(epoch_itr.epoch))
+    logger.info(
+        "end of epoch {} (average epoch stats below)".format(epoch_itr.epoch))
     stats = get_training_stats(metrics.get_smoothed_values("train"))
     progress.print(stats, tag="train", step=num_updates)
 
@@ -298,8 +295,7 @@ def validate_and_save(
     if do_save or should_stop:
         logger.info("begin save checkpoint")
         checkpoint_utils.save_checkpoint(
-            cfg.checkpoint, trainer, epoch_itr, valid_losses[0]
-        )
+            args, trainer, epoch_itr, valid_losses[0])
 
     return valid_losses, should_stop
 
@@ -338,14 +334,11 @@ def validate(
             epoch=epoch_itr.epoch,
             prefix=f"valid on '{subset}' subset",
             tensorboard_logdir=(
-                cfg.common.tensorboard_logdir
-                if distributed_utils.is_master(cfg.distributed_training)
-                else None
+                args.tensorboard_logdir if distributed_utils.is_master(
+                    args) else None
             ),
-            default_log_format=("tqdm" if not cfg.common.no_progress_bar else "simple"),
-            wandb_project=(
-                cfg.common.wandb_project if distributed_utils.is_master(cfg.distributed_training) else None
-            ),
+            default_log_format=(
+                "tqdm" if not args.no_progress_bar else "simple"),
         )
 
         # create a new root metrics aggregator so validation metrics
@@ -382,7 +375,8 @@ def cli_main(
     parser = options.get_training_parser()
     args = options.parse_args_and_arch(parser, modify_parser=modify_parser)
 
-    cfg = convert_namespace_to_omegaconf(args)
+    # import pdb
+    # pdb.set_trace()
 
     if args.profile:
         with torch.cuda.profiler.profile():
