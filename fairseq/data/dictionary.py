@@ -150,13 +150,15 @@ class Dictionary(object):
         if nwords <= 0:
             nwords = len(self)
 
-        new_indices = dict(zip(self.symbols[: self.nspecial], range(self.nspecial)))
+        new_indices = dict(
+            zip(self.symbols[: self.nspecial], range(self.nspecial)))
         new_symbols = self.symbols[: self.nspecial]
         new_count = self.count[: self.nspecial]
 
         c = Counter(
             dict(
-                sorted(zip(self.symbols[self.nspecial :], self.count[self.nspecial :]))
+                sorted(zip(self.symbols[self.nspecial:],
+                           self.count[self.nspecial:]))
             )
         )
         for symbol, count in c.most_common(nwords - self.nspecial):
@@ -232,6 +234,9 @@ class Dictionary(object):
                 )
             return
 
+        # import pdb
+        # pdb.set_trace()
+
         lines = f.readlines()
         indices_start_line = self._load_meta(lines)
 
@@ -243,7 +248,13 @@ class Dictionary(object):
                     line, field = line.rsplit(" ", 1)
                 else:
                     overwrite = False
+
+                # expects one-hot encoding, but ext_senti,
+                # ext_cate, ext_rate are floats between [0, 1]
+                # try:
                 count = int(field)
+                # except ValueError:
+                # count = float(field)
                 word = line
                 if word in self and not overwrite:
                     raise RuntimeError(
@@ -280,8 +291,8 @@ class Dictionary(object):
         self._save(
             f,
             zip(
-                ex_keys + self.symbols[self.nspecial :],
-                ex_vals + self.count[self.nspecial :],
+                ex_keys + self.symbols[self.nspecial:],
+                ex_vals + self.count[self.nspecial:],
             ),
         )
 

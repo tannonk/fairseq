@@ -72,7 +72,8 @@ class Trainer(object):
             ref = _get_module_by_path(self._model, shared_param[0])
             for path in shared_param[1:]:
                 logger.info(
-                    'detected shared parameter: {} <- {}'.format(shared_param[0], path)
+                    'detected shared parameter: {} <- {}'.format(
+                        shared_param[0], path)
                 )
                 _set_module_by_path(self._model, path, ref)
 
@@ -88,7 +89,8 @@ class Trainer(object):
 
         # TODO(myleott): support tpu
         if self.cuda and self.data_parallel_world_size > 1:
-            self._grad_norm_buf = torch.cuda.DoubleTensor(self.data_parallel_world_size)
+            self._grad_norm_buf = torch.cuda.DoubleTensor(
+                self.data_parallel_world_size)
         else:
             self._grad_norm_buf = None
 
@@ -100,11 +102,13 @@ class Trainer(object):
         if self.cuda:
             self.cuda_env = utils.CudaEnvironment()
             if self.data_parallel_world_size > 1:
-                self.cuda_env_arr = distributed_utils.all_gather_list(self.cuda_env)
+                self.cuda_env_arr = distributed_utils.all_gather_list(
+                    self.cuda_env)
             else:
                 self.cuda_env_arr = [self.cuda_env]
             if self.data_parallel_rank == 0:
-                utils.CudaEnvironment.pretty_print_cuda_env_list(self.cuda_env_arr)
+                utils.CudaEnvironment.pretty_print_cuda_env_list(
+                    self.cuda_env_arr)
         else:
             self.cuda_env = None
             self.cuda_env_arr = None
@@ -205,10 +209,12 @@ class Trainer(object):
                     self.args, params
                 )
             else:
-                self._optimizer = optim.FP16Optimizer.build_optimizer(self.args, params)
+                self._optimizer = optim.FP16Optimizer.build_optimizer(
+                    self.args, params)
         else:
             if self.cuda and torch.cuda.get_device_capability(0)[0] >= 7:
-                logger.info("NOTE: your device may support faster training with --fp16")
+                logger.info(
+                    "NOTE: your device may support faster training with --fp16")
             self._optimizer = optim.build_optimizer(self.args, params)
 
         if self.args.use_bmuf:
@@ -216,7 +222,8 @@ class Trainer(object):
 
         # We should initialize the learning rate scheduler immediately after
         # building the optimizer, so that the initial learning rate is set.
-        self._lr_scheduler = lr_scheduler.build_lr_scheduler(self.args, self.optimizer)
+        self._lr_scheduler = lr_scheduler.build_lr_scheduler(
+            self.args, self.optimizer)
         self._lr_scheduler.step_update(0)
 
     def save_checkpoint(self, filename, extra_state):
@@ -263,7 +270,8 @@ class Trainer(object):
             except Exception:
                 raise Exception(
                     "Cannot load model parameters from checkpoint {}; "
-                    "please ensure that the architectures match.".format(filename)
+                    "please ensure that the architectures match.".format(
+                        filename)
                 )
 
             extra_state = state["extra_state"]
@@ -277,15 +285,18 @@ class Trainer(object):
             # only reload optimizer and lr_scheduler if they match
             last_optim = self._optim_history[-1]
             assert (
-                last_optim["criterion_name"] == self.get_criterion().__class__.__name__
+                last_optim["criterion_name"] == self.get_criterion(
+                ).__class__.__name__
             ), "Criterion does not match; please reset the optimizer (--reset-optimizer)."
             assert (
                 last_optim["optimizer_name"] == self.optimizer.__class__.__name__
             ), "Optimizer does not match; please reset the optimizer (--reset-optimizer)."
 
             if not reset_lr_scheduler:
-                self.lr_scheduler.load_state_dict(last_optim["lr_scheduler_state"])
-            self.optimizer.load_state_dict(last_optim_state, optimizer_overrides)
+                self.lr_scheduler.load_state_dict(
+                    last_optim["lr_scheduler_state"])
+            self.optimizer.load_state_dict(
+                last_optim_state, optimizer_overrides)
 
             self.set_num_updates(last_optim["num_updates"])
 
@@ -384,6 +395,8 @@ class Trainer(object):
         """Do forward, backward and parameter update."""
         if self._dummy_batch == "DUMMY":
             self._dummy_batch = samples[0]
+
+        # import pdb; pdb.set_trace()
 
         self._set_seed()
         self.model.train()
@@ -489,14 +502,16 @@ class Trainer(object):
             if self.tpu and self.data_parallel_world_size > 1:
                 import torch_xla.core.xla_model as xm
                 gradients = xm._fetch_gradients(self.optimizer.optimizer)
-                xm.all_reduce('sum', gradients, scale=1.0 / self.data_parallel_world_size)
+                xm.all_reduce('sum', gradients, scale=1.0 /
+                              self.data_parallel_world_size)
 
             with torch.autograd.profiler.record_function("multiply-grads"):
                 # multiply gradients by (# GPUs / sample_size) since DDP
                 # already normalizes by the number of GPUs. Thus we get
                 # (sum_of_gradients / sample_size).
                 if not self.args.use_bmuf:
-                    self.optimizer.multiply_grads(self.data_parallel_world_size / sample_size)
+                    self.optimizer.multiply_grads(
+                        self.data_parallel_world_size / sample_size)
                 elif sample_size > 0:  # BMUF needs to check sample size
                     num = self.data_parallel_world_size if self._sync_stats() else 1
                     self.optimizer.multiply_grads(num / sample_size)
@@ -539,9 +554,11 @@ class Trainer(object):
         # Some distributed wrappers (e.g., SlowMo) need access to the optimizer after the step
         if hasattr(self.model, 'perform_additional_optimizer_actions'):
             if hasattr(self.optimizer, 'fp32_params'):
-                self.model.perform_additional_optimizer_actions(self.optimizer.optimizer, self.optimizer.fp32_params)
+                self.model.perform_additional_optimizer_actions(
+                    self.optimizer.optimizer, self.optimizer.fp32_params)
             else:
-                self.model.perform_additional_optimizer_actions(self.optimizer.optimizer)
+                self.model.perform_additional_optimizer_actions(
+                    self.optimizer.optimizer)
 
         if not overflow or self.args.distributed_wrapper == 'SlowMo':
             self.set_num_updates(self.get_num_updates() + 1)
@@ -581,7 +598,8 @@ class Trainer(object):
                     torch.cuda.empty_cache()
 
         if self.args.fp16:
-            metrics.log_scalar("loss_scale", self.optimizer.scaler.loss_scale, priority=700, round=0)
+            metrics.log_scalar(
+                "loss_scale", self.optimizer.scaler.loss_scale, priority=700, round=0)
 
         metrics.log_stop_time("train_wall")
 
@@ -641,7 +659,8 @@ class Trainer(object):
             )
 
         # log validation stats
-        logging_output = self._reduce_and_log_stats(logging_outputs, sample_size)
+        logging_output = self._reduce_and_log_stats(
+            logging_outputs, sample_size)
 
         return logging_output
 
@@ -723,7 +742,8 @@ class Trainer(object):
         self.lr_step_update()
         if self.quantizer:
             self.quantizer.step_update(self._num_updates)
-        metrics.log_scalar("num_updates", self._num_updates, weight=0, priority=200)
+        metrics.log_scalar("num_updates", self._num_updates,
+                           weight=0, priority=200)
 
     def clip_grad_norm(self, clip_norm):
         return self.optimizer.clip_grad_norm(clip_norm, aggregate_norm_fn=None)
@@ -876,7 +896,8 @@ class Trainer(object):
             data['extra_stats_' + str(i)] for i in range(len(extra_stats_to_sum))
         ]
         if log_keys is not None:
-            logging_outputs = [{k: data['logging_outputs_' + k] for k in log_keys}]
+            logging_outputs = [{k: data['logging_outputs_' + k]
+                                for k in log_keys}]
         else:
             logging_outputs = []
         return logging_outputs, extra_stats_to_sum
@@ -900,7 +921,8 @@ class Trainer(object):
                     "rank {:3d} = {:.8f}".format(r, n)
                     for r, n in enumerate(self._grad_norm_buf.tolist())
                 )
-                error_detail = "grad_norm across the workers:\n{}\n".format(pretty_detail)
+                error_detail = "grad_norm across the workers:\n{}\n".format(
+                    pretty_detail)
                 raise RuntimeError(
                     "Fatal error: gradients are inconsistent between workers. "
                     "Try --ddp-backend=no_c10d. "
