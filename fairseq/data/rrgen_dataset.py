@@ -138,11 +138,10 @@ def collate(
             'ext_senti': ext_senti,  # sentiment scores for samples
             'ext_cate': ext_cate,  # category value for samples
             'ext_rate': ext_rate,  # review rating scores for samples
-            # 'target': target,
         },
-        'ext_senti': ext_senti,  # sentiment scores for samples
-        'ext_cate': ext_cate,  # category value for samples
-        'ext_rate': ext_rate,  # review rating scores for samples
+        # 'ext_senti': ext_senti,  # sentiment scores for samples
+        # 'ext_cate': ext_cate,  # category value for samples
+        # 'ext_rate': ext_rate,  # review rating scores for samples
         'target': target,
     }
 
@@ -365,6 +364,9 @@ class RRGenDataset(FairseqDataset):
         else:
             ext_cate_item = None
 
+        # import pdb
+        # pdb.set_trace()
+
         if self.ext_rate and self.ext_rate_dict:
             ext_rate_item = torch.Tensor(
                 [self.ext_rate_dict[self.ext_rate[index]]])
@@ -377,9 +379,6 @@ class RRGenDataset(FairseqDataset):
         #     [self.ext_cate[index]]) if self.ext_cate is not None else None
         # ext_rate_item = torch.LongTensor(
         #     [self.ext_rate[index]]) if self.ext_rate is not None else None
-
-        # import pdb
-        # pdb.set_trace()
 
         example = {
             'id': index,

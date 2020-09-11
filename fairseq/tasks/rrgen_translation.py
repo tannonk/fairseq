@@ -61,9 +61,9 @@ def load_rrgen_dataset(
     truncate_source=False, append_source_id=False,
     num_buckets=0,
     shuffle=True,
-    use_sentiment=False,
-    use_category=False,
-    use_rating=False,
+    use_sentiment=None,
+    use_category=None,
+    use_rating=None,
     ext_senti_dict=None,
     ext_cate_dict=None,
     ext_rate_dict=None,
@@ -129,27 +129,29 @@ def load_rrgen_dataset(
         # import pdb
         # pdb.set_trace()
 
-        if use_sentiment and os.path.isfile(prefix + 'senti'):
-            with open(prefix + 'senti', 'r', encoding='utf8') as f:
-                # senti_dataset = [int(i.strip()) for i in f.readlines()]
-                senti_dataset = [i.strip() for i in f.readlines()]
-
-            senti_datasets.append(senti_dataset)
+        if use_sentiment is not None:
+            try:
+                with open(prefix + use_sentiment, 'r', encoding='utf8') as f:
+                    # senti_dataset = [int(i.strip()) for i in f.readlines()]
+                    senti_dataset = [i.strip() for i in f.readlines()]
+                senti_datasets.append(senti_dataset)
+            except:
+                sys.exit('[!] Failed to get ')
         else:
             senti_dataset = None
 
-        if use_category and os.path.isfile(prefix + 'cate'):
+        if use_category is not None and os.path.isfile(prefix + use_category):
             # NOTE: for simplicity Hotel = 1, Restaurant = 2
             # in files
-            with open(prefix + 'cate', 'r', encoding='utf8') as f:
+            with open(prefix + use_category, 'r', encoding='utf8') as f:
                 # cate_dataset = [int(i.strip()) for i in f.readlines()]
                 cate_dataset = [i.strip() for i in f.readlines()]
             cate_datasets.append(cate_dataset)
         else:
             cate_dataset = None
 
-        if use_rating and os.path.isfile(prefix + 'rate'):
-            with open(prefix + 'rate', 'r', encoding='utf8') as f:
+        if use_rating is not None and os.path.isfile(prefix + use_rating):
+            with open(prefix + use_rating, 'r', encoding='utf8') as f:
                 # rate_dataset = [int(i.strip()) for i in f.readlines()]
                 rate_dataset = [i.strip() for i in f.readlines()]
             rate_datasets.append(rate_dataset)
@@ -309,15 +311,22 @@ class RRGenTranslationTask(FairseqTask):
         # RRGen
         # -----
 
-        parser.add_argument('--use-sentiment', action='store_true', default=False,
-                            help='incorporate sentiment annotations for input review')
-        parser.add_argument('--sentiment-range', type=str, default='-5,5')
+        # parser.add_argument('--use-sentiment', action='store_true', default=False,
+        #                     help='incorporate sentiment annotations for input review')
+        # parser.add_argument('--use-category', action='store_true', default=False,
+        #                     help='incorporate category annotations for input review')
+        # parser.add_argument('--use-rating', action='store_true', default=False,
+        #                     help='incorporate rating annotations for input review')
+        # parser.add_argument('--use-length', action='store_true', default=False,
+        #                     help='incorporate length attribute for input review')
 
-        parser.add_argument('--use-category', action='store_true', default=False,
+        parser.add_argument('--use-sentiment', default=None,
+                            help='incorporate sentiment annotations for input review: specify filename stem, e.g. `sentiment`.')
+        parser.add_argument('--use-category', default=None,
                             help='incorporate category annotations for input review')
-        parser.add_argument('--use-rating', action='store_true', default=False,
+        parser.add_argument('--use-rating', default=None,
                             help='incorporate rating annotations for input review')
-        parser.add_argument('--use-length', action='store_true', default=False,
+        parser.add_argument('--use-length', default=None,
                             help='incorporate length attribute for input review')
 
     def __init__(self, args, src_dict, tgt_dict, ext_senti_dict, ext_cate_dict, ext_rate_dict):
@@ -362,27 +371,27 @@ class RRGenTranslationTask(FairseqTask):
         logger.info('[{}] dictionary: {} types'.format(
             args.target_lang, len(tgt_dict)))
 
-        if args.use_sentiment:
+        if args.use_sentiment is not None:
             ext_senti_dict = cls.load_normalisation_dictionary(os.path.join(
-                paths[0], 'dict.senti.txt'))
-            logger.info('[senti] dictionary: {} types'.format(
-                len(ext_senti_dict)))
+                paths[0], 'dict.{}.txt'.format(args.use_sentiment)))
+            logger.info('[{}] dictionary: {} types'.format(args.use_sentiment,
+                                                           len(ext_senti_dict)))
         else:
             ext_senti_dict = None
 
-        if args.use_category:
+        if args.use_category is not None:
             ext_cate_dict = cls.load_normalisation_dictionary(os.path.join(
-                paths[0], 'dict.cate.txt'))
-            logger.info('[cate] dictionary: {} types'.format(
-                len(ext_cate_dict)))
+                paths[0], 'dict.{}.txt'.format(args.use_category)))
+            logger.info('[{}] dictionary: {} types'.format(args.use_category,
+                                                           len(ext_cate_dict)))
         else:
             ext_cate_dict = None
 
-        if args.use_rating:
+        if args.use_rating is not None:
             ext_rate_dict = cls.load_normalisation_dictionary(os.path.join(
-                paths[0], 'dict.rate.txt'))
-            logger.info('[rate] dictionary: {} types'.format(
-                len(ext_rate_dict)))
+                paths[0], 'dict.{}.txt'.format(args.use_rating)))
+            logger.info('[{}] dictionary: {} types'.format(args.use_rating,
+                                                           len(ext_rate_dict)))
         else:
             ext_rate_dict = None
 
@@ -390,18 +399,15 @@ class RRGenTranslationTask(FairseqTask):
 
     @staticmethod
     def build_normalisation_dictionary(filenames: List, dict_path: str, senti: bool = False, cate: bool = False, rate: bool = False):
-        """Build a normalisation dictionary instead of a regular token-index mapping dictionary.
+        """Build a normalisation dictionary instead of a
+        regular token-index mapping dictionary.
+
+        All data values are mapped to values in range [0,1]
+
         Args:
 
-            filenames (list): list of filenames
-            # workers (int): number of concurrent workers
-            # threshold (int): defines the minimum word count
-            # nwords (int): defines the total number of words in the final dictionary,
-            #     including special symbols
-            # padding_factor (int): can be used to pad the dictionary size to be a
-            #     multiple of 8, which is important on some hardware (e.g., Nvidia
-            #     Tensor Cores).
-
+            filenames : list of filenames
+            dict_path : path to output dictionary file
         """
 
         data = Counter()

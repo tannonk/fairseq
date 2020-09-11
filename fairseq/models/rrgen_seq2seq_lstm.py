@@ -285,6 +285,10 @@ class RRGenLSTMEncoder(FairseqEncoder):
         src_tokens: Tensor,
         src_lengths: Tensor,
         enforce_sorted: bool = True,
+        ext_senti: Optional[Tensor] = None,
+        ext_cate: Optional[Tensor] = None,
+        ext_rate: Optional[Tensor] = None
+
     ):
         """
         Args:
@@ -296,6 +300,9 @@ class RRGenLSTMEncoder(FairseqEncoder):
                 expected to contain sequences sorted by length in a
                 decreasing order. If False, this condition is not
                 required. Default: True.
+
+            NOTE
+            ext_senti, ext_cate and ext_rate are passed to encoder for simplicity but they are not used in the encoder
         """
         if self.left_pad:
             # nn.utils.rnn.pack_padded_sequence requires right-padding;
@@ -582,17 +589,18 @@ class RRGenLSTMDecoder(FairseqIncrementalDecoder):
         elif encoder_out is not None:
             # setup recurrent cells
 
-            if self.use_senti and ext_senti != None:
+            if self.use_senti and ext_senti is not None:
                 encoder_hiddens, encoder_cells = self.extend_hidden_state(
                     encoder_hiddens, encoder_cells, ext_senti)
-            if self.use_cate and ext_cate != None:
+            if self.use_cate and ext_cate is not None:
                 encoder_hiddens, encoder_cells = self.extend_hidden_state(
                     encoder_hiddens, encoder_cells, ext_cate)
-            if self.use_rate and ext_rate != None:
+            if self.use_rate and ext_rate is not None:
                 encoder_hiddens, encoder_cells = self.extend_hidden_state(
                     encoder_hiddens, encoder_cells, ext_rate)
 
-            # TODO: concat length features into decoder
+            # TODO: concat SRC LENGTH features into decoder
+            # as well
 
             prev_hiddens = [encoder_hiddens[i] for i in range(self.num_layers)]
             prev_cells = [encoder_cells[i] for i in range(self.num_layers)]
@@ -742,6 +750,19 @@ class RRGenLSTMDecoder(FairseqIncrementalDecoder):
             incremental_state, 'cached_state', cached_state_new),
         return
 
+    def reorder_ext_attributes(self, ext_atts: Tensor, new_order: Tensor):
+        """
+        Reorder an A-component attribute vector
+
+        ext_vector : e.g. ext_senti Tensor([batch_size]), etc.
+        new_order : index Tensor indicating how to reorder
+        the input tensor
+        """
+        # import pdb
+        # pdb.set_trace()
+
+        return ext_atts.view(1, -1).index_select(1, new_order).view(-1)
+
     def max_positions(self):
         """Maximum output length supported by the decoder."""
         return self.max_target_positions
@@ -750,7 +771,7 @@ class RRGenLSTMDecoder(FairseqIncrementalDecoder):
         self.need_attn = need_attn
 
     @staticmethod
-    def extend_hidden_state(encoder_hiddens: Tensor, encoder_cells: Tensor, ext_vector: Tensor):
+    def extend_hidden_state(encoder_hiddens: Tensor, encoder_cells: Tensor, ext_atts: Tensor):
         """
         Concatenate ext attribute vectors to current hidden
         states and cells along axis 1
@@ -760,15 +781,20 @@ class RRGenLSTMDecoder(FairseqIncrementalDecoder):
             encoder_cells : final encoder hidden cells
             ext_vector : attribute features, e.g. sentiment,
         """
+
+        # import pdb
+        # pdb.set_trace()
+
         # repeat ext_senti attribute vector by
         # number of hidden states in encoder output
-        ext_vector = ext_vector.repeat(len(encoder_hiddens), 1)
-        # concatenate attribute features onto
+        ext_atts = ext_atts.repeat(len(encoder_hiddens), 1)
+
+        # concatenate attribute features with
         # encoder hidden states
         encoder_hiddens = [
-            torch.cat((h, v.unsqueeze(1)), 1) for h, v in zip(encoder_hiddens, ext_vector)]
+            torch.cat((h, v.unsqueeze(-1)), 1) for h, v in zip(encoder_hiddens, ext_atts)]
         encoder_cells = [
-            torch.cat((c, v.unsqueeze(1)), 1) for c, v in zip(encoder_cells, ext_vector)]
+            torch.cat((c, v.unsqueeze(-1)), 1) for c, v in zip(encoder_cells, ext_atts)]
 
         return encoder_hiddens, encoder_cells
 
