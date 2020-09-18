@@ -31,7 +31,8 @@ def main(args):
 
     if args.results_path is not None:
         os.makedirs(args.results_path, exist_ok=True)
-        output_path = os.path.join(args.results_path, 'generate-{}.txt'.format(args.gen_subset))
+        output_path = os.path.join(
+            args.results_path, 'generate-{}.txt'.format(args.gen_subset))
         with open(output_path, 'w', buffering=1, encoding='utf-8') as h:
             return _main(args, h)
     else:
@@ -99,6 +100,9 @@ def _main(args, output_file):
     # (None if no unknown word replacement, empty if no path to align dictionary)
     align_dict = utils.load_align_dict(args.replace_unk)
 
+    # import pdb
+    # pdb.set_trace()
+
     # Load dataset (possibly sharded)
     itr = task.get_batch_iterator(
         dataset=task.dataset(args.gen_subset),
@@ -120,6 +124,9 @@ def _main(args, output_file):
         log_interval=args.log_interval,
         default_log_format=('tqdm' if not args.no_progress_bar else 'none'),
     )
+
+    # import pdb
+    # pdb.set_trace()
 
     # Initialize generator
     gen_timer = StopwatchMeter()
@@ -162,15 +169,19 @@ def _main(args, output_file):
             has_target = sample['target'] is not None
 
             # Remove padding
-            src_tokens = utils.strip_pad(sample['net_input']['src_tokens'][i, :], tgt_dict.pad())
+            src_tokens = utils.strip_pad(
+                sample['net_input']['src_tokens'][i, :], tgt_dict.pad())
             target_tokens = None
             if has_target:
-                target_tokens = utils.strip_pad(sample['target'][i, :], tgt_dict.pad()).int().cpu()
+                target_tokens = utils.strip_pad(
+                    sample['target'][i, :], tgt_dict.pad()).int().cpu()
 
             # Either retrieve the original sentences or regenerate them from tokens.
             if align_dict is not None:
-                src_str = task.dataset(args.gen_subset).src.get_original_text(sample_id)
-                target_str = task.dataset(args.gen_subset).tgt.get_original_text(sample_id)
+                src_str = task.dataset(
+                    args.gen_subset).src.get_original_text(sample_id)
+                target_str = task.dataset(
+                    args.gen_subset).tgt.get_original_text(sample_id)
             else:
                 if src_dict is not None:
                     src_str = src_dict.string(src_tokens, args.remove_bpe)
@@ -181,7 +192,8 @@ def _main(args, output_file):
                         target_tokens,
                         args.remove_bpe,
                         escape_unk=True,
-                        extra_symbols_to_ignore=get_symbols_to_strip_from_output(generator),
+                        extra_symbols_to_ignore=get_symbols_to_strip_from_output(
+                            generator),
                     )
 
             src_str = decode_fn(src_str)
@@ -192,7 +204,8 @@ def _main(args, output_file):
                 if src_dict is not None:
                     print('S-{}\t{}'.format(sample_id, src_str), file=output_file)
                 if has_target:
-                    print('T-{}\t{}'.format(sample_id, target_str), file=output_file)
+                    print('T-{}\t{}'.format(sample_id,
+                                            target_str), file=output_file)
 
             # Process top predictions
             for j, hypo in enumerate(hypos[i][:args.nbest]):
@@ -203,32 +216,38 @@ def _main(args, output_file):
                     align_dict=align_dict,
                     tgt_dict=tgt_dict,
                     remove_bpe=args.remove_bpe,
-                    extra_symbols_to_ignore=get_symbols_to_strip_from_output(generator),
+                    extra_symbols_to_ignore=get_symbols_to_strip_from_output(
+                        generator),
                 )
                 detok_hypo_str = decode_fn(hypo_str)
                 if not args.quiet:
                     score = hypo['score'] / math.log(2)  # convert to base 2
                     # original hypothesis (after tokenization and BPE)
-                    print('H-{}\t{}\t{}'.format(sample_id, score, hypo_str), file=output_file)
+                    print('H-{}\t{}\t{}'.format(sample_id,
+                                                score, hypo_str), file=output_file)
                     # detokenized hypothesis
-                    print('D-{}\t{}\t{}'.format(sample_id, score, detok_hypo_str), file=output_file)
+                    print('D-{}\t{}\t{}'.format(sample_id, score,
+                                                detok_hypo_str), file=output_file)
                     print('P-{}\t{}'.format(
                         sample_id,
                         ' '.join(map(
                             lambda x: '{:.4f}'.format(x),
                             # convert from base e to base 2
-                            hypo['positional_scores'].div_(math.log(2)).tolist(),
+                            hypo['positional_scores'].div_(
+                                math.log(2)).tolist(),
                         ))
                     ), file=output_file)
 
                     if args.print_alignment:
                         print('A-{}\t{}'.format(
                             sample_id,
-                            ' '.join(['{}-{}'.format(src_idx, tgt_idx) for src_idx, tgt_idx in alignment])
+                            ' '.join(['{}-{}'.format(src_idx, tgt_idx)
+                                      for src_idx, tgt_idx in alignment])
                         ), file=output_file)
 
                     if args.print_step:
-                        print('I-{}\t{}'.format(sample_id, hypo['steps']), file=output_file)
+                        print('I-{}\t{}'.format(sample_id,
+                                                hypo['steps']), file=output_file)
 
                     if getattr(args, 'retain_iter_history', False):
                         for step, h in enumerate(hypo['history']):
@@ -240,14 +259,17 @@ def _main(args, output_file):
                                 tgt_dict=tgt_dict,
                                 remove_bpe=None,
                             )
-                            print('E-{}_{}\t{}'.format(sample_id, step, h_str), file=output_file)
+                            print('E-{}_{}\t{}'.format(sample_id,
+                                                       step, h_str), file=output_file)
 
                 # Score only the top hypothesis
                 if has_target and j == 0:
                     if align_dict is not None or args.remove_bpe is not None:
                         # Convert back to tokens for evaluation with unk replacement and/or without BPE
-                        target_tokens = tgt_dict.encode_line(target_str, add_if_not_exist=True)
-                        hypo_tokens = tgt_dict.encode_line(detok_hypo_str, add_if_not_exist=True)
+                        target_tokens = tgt_dict.encode_line(
+                            target_str, add_if_not_exist=True)
+                        hypo_tokens = tgt_dict.encode_line(
+                            detok_hypo_str, add_if_not_exist=True)
                     if hasattr(scorer, 'add_string'):
                         scorer.add_string(target_str, detok_hypo_str)
                     else:
@@ -263,10 +285,13 @@ def _main(args, output_file):
     if has_target:
         if args.bpe and not args.sacrebleu:
             if args.remove_bpe:
-                logger.warning("BLEU score is being computed by splitting detokenized string on spaces, this is probably not what you want. Use --sacrebleu for standard 13a BLEU tokenization")
+                logger.warning(
+                    "BLEU score is being computed by splitting detokenized string on spaces, this is probably not what you want. Use --sacrebleu for standard 13a BLEU tokenization")
             else:
-                logger.warning("If you are using BPE on the target side, the BLEU score is computed on BPE tokens, not on proper words.  Use --sacrebleu for standard 13a BLEU tokenization")
-        logger.info('Generate {} with beam={}: {}'.format(args.gen_subset, args.beam, scorer.result_string()))
+                logger.warning(
+                    "If you are using BPE on the target side, the BLEU score is computed on BPE tokens, not on proper words.  Use --sacrebleu for standard 13a BLEU tokenization")
+        logger.info('Generate {} with beam={}: {}'.format(
+            args.gen_subset, args.beam, scorer.result_string()))
 
     return scorer
 

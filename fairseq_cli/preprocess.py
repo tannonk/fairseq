@@ -25,10 +25,11 @@ from fairseq import options, tasks, utils
 from fairseq.data import indexed_dataset
 from fairseq.binarizer import Binarizer
 
-# Set to false if not available/required
-USE_SENTIMENT = True
-USE_CATEGORY = True
-USE_RATING = True
+# update to file indicator if not available/required,
+# otherwise set to False
+USE_SENTIMENT = 'sentiment'
+USE_CATEGORY = 'domain'
+USE_RATING = 'rating'
 
 logging.basicConfig(
     format='%(asctime)s | %(levelname)s | %(name)s | %(message)s',
@@ -126,15 +127,27 @@ def main(args):
 
     if USE_SENTIMENT:
         senti_dict = task.build_normalisation_dictionary(
-            filenames=[train_path('senti')], dict_path=dict_path('senti'), senti=True)
+            filenames=[train_path(USE_SENTIMENT)], dict_path=dict_path(USE_SENTIMENT), senti=True)
 
     if USE_CATEGORY:
         cate_dict = task.build_normalisation_dictionary(
-            filenames=[train_path('cate')], dict_path=dict_path('cate'), cate=True)
+            filenames=[train_path(USE_CATEGORY)], dict_path=dict_path(USE_CATEGORY), cate=True)
 
     if USE_RATING:
         rate_dict = task.build_normalisation_dictionary(
-            filenames=[train_path('rate')], dict_path=dict_path('rate'), rate=True)
+            filenames=[train_path(USE_RATING)], dict_path=dict_path(USE_RATING), rate=True)
+
+    # if USE_SENTIMENT:
+    #     senti_dict = task.build_normalisation_dictionary(
+    #         filenames=[train_path('senti')], dict_path=dict_path('senti'), senti=True)
+
+    # if USE_CATEGORY:
+    #     cate_dict = task.build_normalisation_dictionary(
+    #         filenames=[train_path('cate')], dict_path=dict_path('cate'), cate=True)
+
+    # if USE_RATING:
+    #     rate_dict = task.build_normalisation_dictionary(
+    #         filenames=[train_path('rate')], dict_path=dict_path('rate'), rate=True)
 
     src_dict.save(dict_path(args.source_lang))
     if target and tgt_dict is not None:
@@ -302,13 +315,22 @@ def main(args):
         make_all(args.target_lang, tgt_dict)
 
     if USE_SENTIMENT:
-        make_all('senti', senti_dict)
+        make_all(USE_SENTIMENT, senti_dict)
 
     if USE_CATEGORY:
-        make_all('cate', cate_dict)
+        make_all(USE_CATEGORY, cate_dict)
 
     if USE_RATING:
-        make_all('rate', rate_dict)
+        make_all(USE_RATING, rate_dict)
+
+    # if USE_SENTIMENT:
+    #     make_all('senti', senti_dict)
+
+    # if USE_CATEGORY:
+    #     make_all('cate', cate_dict)
+
+    # if USE_RATING:
+    #     make_all('rate', rate_dict)
 
     if args.align_suffix:
         make_all_alignments()

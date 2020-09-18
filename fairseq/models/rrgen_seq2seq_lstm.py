@@ -869,11 +869,11 @@ def rrgen_lstm_arch(args):
     args.share_all_embeddings = getattr(args, 'share_all_embeddings', False)
     args.adaptive_softmax_cutoff = getattr(
         args, 'adaptive_softmax_cutoff', '10000,50000,200000')
-    args.learning_rate = getattr(args, 'learning-rate', 0.001)
+    args.learning_rate = getattr(args, 'learning_rate', 0.001)
     args.optimizer = getattr(args, 'optimizer', 'adam')
     args.skip_invalid_size_inputs_valid_test = getattr(
-        args, 'skip-invalid-size-inputs-valid-test', True)
-    args.max_tokens = getattr(args, 'max-tokens', 2000)
-    args.batch_size = getattr(args, 'batch-size', 8)
+        args, 'skip_invalid_size_inputs_valid_test', True)
+    args.max_tokens = getattr(args, 'max_tokens', 2000)
+    args.batch_size = getattr(args, 'batch_size', 8)
     # args.num_workers = getattr(args, 'num-workers', 0) # good for debugging
     args.tie_ext_features = getattr(args, 'tie_ext_features', True)

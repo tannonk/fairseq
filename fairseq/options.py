@@ -119,8 +119,10 @@ def parse_args_and_arch(
             parse_known=parse_known,
             suppress_defaults=False,
         )
-        suppressed_parser = argparse.ArgumentParser(add_help=False, parents=[parser])
-        suppressed_parser.set_defaults(**{k: None for k, v in vars(args).items()})
+        suppressed_parser = argparse.ArgumentParser(
+            add_help=False, parents=[parser])
+        suppressed_parser.set_defaults(
+            **{k: None for k, v in vars(args).items()})
         args = suppressed_parser.parse_args(input_args)
         return argparse.Namespace(
             **{k: v for k, v in vars(args).items() if v is not None}
@@ -143,6 +145,7 @@ def parse_args_and_arch(
     # parse a second time after adding the *-specific arguments.
     # If input_args is given, we will parse those args instead of sys.argv.
     args, _ = parser.parse_known_args(input_args)
+
 
     # Add model-specific args to parser.
     if hasattr(args, "arch"):
@@ -172,6 +175,9 @@ def parse_args_and_arch(
         from fairseq.optim.bmuf import FairseqBMUF
 
         FairseqBMUF.add_args(parser)
+
+    # import pdb
+    # pdb.set_trace()
 
     # Modify the parser a second time, since defaults may have been reset
     if modify_parser is not None:
@@ -226,7 +232,8 @@ def get_parser(desc, default_task="translation"):
 
     parser = argparse.ArgumentParser(allow_abbrev=False)
     # fmt: off
-    parser.add_argument('--no-progress-bar', action='store_true', help='disable progress bar')
+    parser.add_argument('--no-progress-bar',
+                        action='store_true', help='disable progress bar')
     parser.add_argument('--log-interval', type=int, default=100, metavar='N',
                         help='log progress every N batches (when progress bar is disabled)')
     parser.add_argument('--log-format', default=None, help='log format to use',
@@ -236,9 +243,12 @@ def get_parser(desc, default_task="translation"):
                              'of running tensorboard (default: no tensorboard logging)')
     parser.add_argument('--seed', default=None, type=int, metavar='N',
                         help='pseudo random number generator seed')
-    parser.add_argument('--cpu', action='store_true', help='use CPU instead of CUDA')
-    parser.add_argument('--tpu', action='store_true', help='use TPU instead of CUDA')
-    parser.add_argument('--bf16', action='store_true', help='use bfloat16; implies --tpu')
+    parser.add_argument('--cpu', action='store_true',
+                        help='use CPU instead of CUDA')
+    parser.add_argument('--tpu', action='store_true',
+                        help='use TPU instead of CUDA')
+    parser.add_argument('--bf16', action='store_true',
+                        help='use bfloat16; implies --tpu')
     parser.add_argument('--fp16', action='store_true', help='use FP16')
     parser.add_argument('--memory-efficient-bf16', action='store_true',
                         help='use a memory-efficient version of BF16 training; implies --bf16')
@@ -269,7 +279,8 @@ def get_parser(desc, default_task="translation"):
                         help='suffix to add to the checkpoint file name')
     parser.add_argument('--quantization-config-path', default=None,
                         help='path to quantization config file')
-    parser.add_argument('--profile', action='store_true', help='enable autograd profiler emit_nvtx')
+    parser.add_argument('--profile', action='store_true',
+                        help='enable autograd profiler emit_nvtx')
 
     from fairseq.registry import REGISTRIES
     for registry_name, REGISTRY in REGISTRIES.items():
@@ -352,7 +363,7 @@ def add_dataset_args(parser, train=False, gen=False):
                         choices=get_available_dataset_impl(),
                         help='output dataset implementation')
     group.add_argument('--data-buffer-size', default=10, type=int, metavar='N',
-                        help='number of batches to preload')
+                       help='number of batches to preload')
     if train:
         group.add_argument('--train-subset', default='train', metavar='SPLIT',
                            help='data subset to use for training (e.g. train, valid, test)')
@@ -426,7 +437,7 @@ def add_distributed_training_args(parser, default_world_size=None):
                        help='[deprecated] this is now defined per Criterion')
     group.add_argument('--broadcast-buffers', default=False, action='store_true',
                        help='Copy non-trainable parameters between GPUs, such as '
-                      'batchnorm population statistics')
+                       'batchnorm population statistics')
 
     group.add_argument('--distributed-wrapper', default='DDP', type=str,
                        choices=['DDP', 'SlowMo'],
@@ -634,7 +645,8 @@ def add_generation_args(parser):
                             'if not set, then dropout will be retained for all modules')
 
     # special decoding format for advanced decoding.
-    group.add_argument('--decoding-format', default=None, type=str, choices=['unigram', 'ensemble', 'vote', 'dp', 'bs'])
+    group.add_argument('--decoding-format', default=None, type=str,
+                       choices=['unigram', 'ensemble', 'vote', 'dp', 'bs'])
     # fmt: on
     return group
 
