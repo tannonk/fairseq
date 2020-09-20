@@ -129,34 +129,82 @@ def load_rrgen_dataset(
         # import pdb
         # pdb.set_trace()
 
-        if use_sentiment is not None:
-            try:
-                with open(prefix + use_sentiment, 'r', encoding='utf8') as f:
-                    # senti_dataset = [int(i.strip()) for i in f.readlines()]
-                    senti_dataset = [i.strip() for i in f.readlines()]
-                senti_datasets.append(senti_dataset)
-            except:
-                sys.exit('[!] Failed to get ')
+        if use_sentiment:
+            if not split_exists(split_k, src, tgt, use_sentiment, data_path) and not split_exists(split_k, tgt, src, use_sentiment, data_path):
+                raise FileNotFoundError(
+                    'Ext {} dataset not found: {} ({})'.format(use_sentiment, split, data_path))
+            prefix = os.path.join(
+                data_path, '{}.{}-{}.'.format(split_k, src, tgt))
+            if dataset_impl != 'raw': # hack for handling both 'raw' and binarized datasets
+                senti_dataset = data_utils.load_indexed_dataset(
+                    prefix + use_sentiment, ext_senti_dict, dataset_impl)
+            else:
+                senti_dataset = data_utils.load_and_map_simple_dataset(
+                    prefix + use_sentiment, ext_senti_dict, dataset_impl
+                )
         else:
             senti_dataset = None
 
-        if use_category is not None and os.path.isfile(prefix + use_category):
-            # NOTE: for simplicity Hotel = 1, Restaurant = 2
-            # in files
-            with open(prefix + use_category, 'r', encoding='utf8') as f:
-                # cate_dataset = [int(i.strip()) for i in f.readlines()]
-                cate_dataset = [i.strip() for i in f.readlines()]
-            cate_datasets.append(cate_dataset)
+        if use_category:
+            if not split_exists(split_k, src, tgt, use_category, data_path) and not split_exists(split_k, tgt, src, use_category, data_path):
+                raise FileNotFoundError(
+                    'Ext {} dataset not found: {} ({})'.format(use_category, split, data_path))
+            prefix = os.path.join(
+                data_path, '{}.{}-{}.'.format(split_k, src, tgt))
+            if dataset_impl != 'raw':
+                cate_dataset = data_utils.load_indexed_dataset(
+                    prefix + use_category, ext_cate_dict, dataset_impl)
+            else:
+                cate_dataset = data_utils.load_and_map_simple_dataset(
+                    prefix + use_category, ext_cate_dict, dataset_impl
+                )
         else:
             cate_dataset = None
 
-        if use_rating is not None and os.path.isfile(prefix + use_rating):
-            with open(prefix + use_rating, 'r', encoding='utf8') as f:
-                # rate_dataset = [int(i.strip()) for i in f.readlines()]
-                rate_dataset = [i.strip() for i in f.readlines()]
-            rate_datasets.append(rate_dataset)
+        if use_rating:
+            if not split_exists(split_k, src, tgt, use_rating, data_path) and not split_exists(split_k, tgt, src, use_rating, data_path):
+                raise FileNotFoundError(
+                    'Ext {} dataset not found: {} ({})'.format(use_rating, split, data_path))
+            prefix = os.path.join(
+                data_path, '{}.{}-{}.'.format(split_k, src, tgt))
+            if dataset_impl != 'raw':
+                rate_dataset = data_utils.load_indexed_dataset(
+                    prefix + use_rating, ext_rate_dict, dataset_impl)
+            else:
+                rate_dataset = data_utils.load_and_map_simple_dataset(
+                    prefix + use_rating, ext_rate_dict, dataset_impl
+                )
         else:
             rate_dataset = None
+
+        # if use_sentiment is not None:
+        #     try:
+        #         with open(prefix + use_sentiment, 'r', encoding='utf8') as f:
+        #             # senti_dataset = [int(i.strip()) for i in f.readlines()]
+        #             senti_dataset = [i.strip() for i in f.readlines()]
+        #         senti_datasets.append(senti_dataset)
+        #     except:
+        #         sys.exit('[!] Failed to get ')
+        # else:
+        #     senti_dataset = None
+
+        # if use_category is not None and os.path.isfile(prefix + use_category):
+        #     # NOTE: for simplicity Hotel = 1, Restaurant = 2
+        #     # in files
+        #     with open(prefix + use_category, 'r', encoding='utf8') as f:
+        #         # cate_dataset = [int(i.strip()) for i in f.readlines()]
+        #         cate_dataset = [i.strip() for i in f.readlines()]
+        #     cate_datasets.append(cate_dataset)
+        # else:
+        #     cate_dataset = None
+
+        # if use_rating is not None and os.path.isfile(prefix + use_rating):
+        #     with open(prefix + use_rating, 'r', encoding='utf8') as f:
+        #         # rate_dataset = [int(i.strip()) for i in f.readlines()]
+        #         rate_dataset = [i.strip() for i in f.readlines()]
+        #     rate_datasets.append(rate_dataset)
+        # else:
+        #     rate_dataset = None
 
         # import pdb
         # pdb.set_trace()
@@ -411,6 +459,7 @@ class RRGenTranslationTask(FairseqTask):
         """
 
         data = Counter()
+        str_dtype = False
         for filename in filenames:
             with open(filename, 'r', encoding='utf8') as f:
                 for line in f:
@@ -418,13 +467,14 @@ class RRGenTranslationTask(FairseqTask):
                     try:
                         data[int(line)] += 1
                     except ValueError:
+                        str_dtype = True
                         data[line] += 1
-
+        # for unknown values
         data_items = sorted(list(data.keys()))
 
-        if cate:
+        if str_dtype:
             # add placeholder for unknown unseen categories
-            data_items.append('<unk>')
+            data_items.insert('<unk>', 0)
             le = LabelEncoder()
             norm_items = le.fit_transform(data_items)
 
@@ -432,6 +482,7 @@ class RRGenTranslationTask(FairseqTask):
             norm_items = scaler.fit_transform(
                 norm_items.reshape(-1, 1)).flatten()
         else:
+            data_items.insert(0, 0)
             # construct a normalisation object
             # using data_items and then flatten
             # to get a 1D array
@@ -478,8 +529,13 @@ class RRGenTranslationTask(FairseqTask):
         for line in lines:
             try:
                 data_val, norm_val = line.rstrip().rsplit(" ", 1)
-                # norm_val is expected to be a float between [0,1]
-                d[data_val] = float(norm_val)
+                # norm_val is expected to be a float between
+                # [0,1]
+                try:
+                    d[int(data_val)] = float(norm_val)
+                except:
+                    d[data_val] = float(norm_val)
+
             except:
                 raise RuntimeError(f'Failed reading {dict_path}!')
 

@@ -98,6 +98,29 @@ def load_indexed_dataset(path, dictionary, dataset_impl=None, combine=False, def
         return ConcatDataset(datasets)
 
 
+def load_and_map_simple_dataset(path, dictionary, dataset_impl=None):
+    """
+    Helper function for loading (and mapping) in raw formatted dataset
+    values according to the relevant dictionary
+    """
+    if dataset_impl != 'raw':
+        raise Exception(
+            f'Expected dataset-impl to be `raw` but got {dataset_impl}')
+
+    with open(path, 'r', encoding='utf8') as f:
+        try:
+            data = [dictionary[int(i.strip())] for i in f.readlines()]
+        except:
+            raise Exception(
+                f'Expected input dataset values to be of type int...')
+        # try:
+        #     data = [int(i.strip()) for i in f.readlines()]
+        # except:
+        #     data = [i.strip() for i in f.readlines()]
+        # values = [i.strip() for i in f.readlines()]
+    return data
+
+
 @contextlib.contextmanager
 def numpy_seed(seed, *addl_seeds):
     """Context manager which seeds the NumPy PRNG with the specified seed and
@@ -185,12 +208,15 @@ def filter_by_size(indices, dataset, max_positions, raise_exception=False):
             ignored = indices[dataset.sizes[indices] > max_positions].tolist()
             indices = indices[dataset.sizes[indices] <= max_positions]
         elif hasattr(dataset, 'sizes') and isinstance(dataset.sizes, list) and len(dataset.sizes) == 1:
-            ignored = indices[dataset.sizes[0][indices] > max_positions].tolist()
+            ignored = indices[dataset.sizes[0]
+                              [indices] > max_positions].tolist()
             indices = indices[dataset.sizes[0][indices] <= max_positions]
         else:
-            indices, ignored = _filter_by_size_dynamic(indices, dataset.size, max_positions)
+            indices, ignored = _filter_by_size_dynamic(
+                indices, dataset.size, max_positions)
     else:
-        indices, ignored = _filter_by_size_dynamic(indices, dataset.size, max_positions)
+        indices, ignored = _filter_by_size_dynamic(
+            indices, dataset.size, max_positions)
 
     if len(ignored) > 0 and raise_exception:
         raise Exception((

@@ -342,36 +342,73 @@ class RRGenDataset(FairseqDataset):
         # import pdb
         # pdb.set_trace()
 
-        # NOTE ext_senti are ints or strings, but dict
-        # keys are strings
+        # NOTE ext attribute features are torch.Tensors, if loaded
+        # using binarized data-impl (e.g. mmap, lazy, etc).
+        # These need to be 'encoded' using the normalised
+        # mapping dictionaries
 
         if self.ext_senti and self.ext_senti_dict:
-            # try:
-            ext_senti_item = torch.Tensor(
-                [self.ext_senti_dict[self.ext_senti[index]]])
-            # except:
-            #     try:
-            #         ext_senti_item = torch.Tensor(
-            #             [self.ext_senti_dict[self.ext_senti[index]]])
-            #     except:
-            #         ext_senti_item = None
+
+            # binarized datasets use Tensors and require
+            # mapping to normalised input value in
+            # corresponding dictionary
+            if isinstance(self.ext_senti[index], torch.Tensor):
+                ext_senti_item = torch.Tensor(
+                    [self.ext_senti_dict[self.ext_senti[index].item()]])
+
+            # elif isinstance(self.ext_senti[index], str):
+            #     ext_senti_item = torch.Tensor([self.ext_senti_dict[str(self.ext_senti[index])])
+            # elif isinstance(self.ext_senti[index], int):
+            #     ext_senti_item = torch.Tensor([self.ext_senti_dict[self.ext_senti[index]])
+            elif isinstance(self.ext_senti[index], float):
+                # no lookup required just convert to tensor
+                # NOTE: mapping to normalised input value is done in data_utils.load_and_map_simple_dataset
+                ext_senti_item = torch.Tensor([self.ext_senti[index]])
         else:
             ext_senti_item = None
 
         if self.ext_cate and self.ext_cate_dict:
-            ext_cate_item = torch.Tensor(
-                [self.ext_cate_dict[self.ext_cate[index]]])
+            if isinstance(self.ext_cate[index], torch.Tensor):
+                ext_cate_item = torch.Tensor(
+                    [self.ext_cate_dict[self.ext_cate[index].item()]])
+            elif isinstance(self.ext_cate[index], float):
+                ext_cate_item = torch.Tensor([self.ext_cate[index]])
+
+            # try:
+            #     ext_cate_item = torch.Tensor(
+            #         [self.ext_cate_dict[self.ext_cate[index].item()]])
+            # except:
+            #     ext_cate_item = torch.Tensor(
+            #         [self.ext_cate_dict[str(self.ext_cate[index].item())]])
         else:
             ext_cate_item = None
 
-        # import pdb
-        # pdb.set_trace()
-
         if self.ext_rate and self.ext_rate_dict:
-            ext_rate_item = torch.Tensor(
-                [self.ext_rate_dict[self.ext_rate[index]]])
+            if isinstance(self.ext_rate[index], torch.Tensor):
+                ext_rate_item = torch.Tensor(
+                    [self.ext_rate_dict[self.ext_rate[index].item()]])
+            elif isinstance(self.ext_rate[index], float):
+                ext_rate_item = torch.Tensor([self.ext_rate[index]])
+            # try:
+            #     ext_rate_item = torch.Tensor(
+            #         [self.ext_rate_dict[self.ext_rate[index].item()]])
+            # except:
+            #     ext_rate_item = torch.Tensor(
+            #         [self.ext_rate_dict[str(self.ext_rate[index].item())]])
         else:
             ext_rate_item = None
+
+        # if self.ext_cate and self.ext_cate_dict:
+        #     ext_cate_item = torch.Tensor(
+        #         [self.ext_cate_dict[self.ext_cate[index]]])
+        # else:
+        #     ext_cate_item = None
+
+        # if self.ext_rate and self.ext_rate_dict:
+        #     ext_rate_item = torch.Tensor(
+        #         [self.ext_rate_dict[self.ext_rate[index]]])
+        # else:
+        #     ext_rate_item = None
 
         # ext_senti_item = torch.LongTensor(
         #     [self.ext_senti[index]]) if self.ext_senti is not None else None
@@ -388,6 +425,9 @@ class RRGenDataset(FairseqDataset):
             'ext_cate': ext_cate_item,
             'ext_rate': ext_rate_item,
         }
+
+        # import pdb
+        # pdb.set_trace()
 
         if self.align_dataset is not None:
             example['alignment'] = self.align_dataset[index]

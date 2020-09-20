@@ -27,6 +27,10 @@ from fairseq.binarizer import Binarizer
 
 # update to file indicator if not available/required,
 # otherwise set to False
+# USE_SENTIMENT = 'senti'
+# USE_CATEGORY = 'cate'
+# USE_RATING = 'rate'
+
 USE_SENTIMENT = 'sentiment'
 USE_CATEGORY = 'domain'
 USE_RATING = 'rating'
@@ -206,16 +210,26 @@ def main(args):
 
         ds.finalize(dataset_dest_file(args, output_prefix, lang, "idx"))
 
-        logger.info(
-            "[{}] {}: {} sents, {} tokens, {:.3}% replaced by {}".format(
-                lang,
-                input_file,
-                n_seq_tok[0],
-                n_seq_tok[1],
-                100 * sum(replaced.values()) / n_seq_tok[1],
-                vocab.unk_word,
+        try:
+            logger.info(
+                "[{}] {}: {} sents, {} tokens, {:.3}% replaced by {}".format(
+                    lang,
+                    input_file,
+                    n_seq_tok[0],
+                    n_seq_tok[1],
+                    100 * sum(replaced.values()) / n_seq_tok[1],
+                    vocab.unk_word,
+                )
             )
-        )
+        except AttributeError:
+            logger.info(
+                "[{}] {}: {} sents, {} tokens".format(
+                    lang,
+                    input_file,
+                    n_seq_tok[0],
+                    n_seq_tok[1],
+                )
+            )
 
     def make_binary_alignment_dataset(input_prefix, output_prefix, num_workers):
         nseq = [0]
