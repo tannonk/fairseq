@@ -102,6 +102,11 @@ def load_and_map_simple_dataset(path, dictionary, dataset_impl=None):
     """
     Helper function for loading (and mapping) in raw formatted dataset
     values according to the relevant dictionary
+
+    Args:
+        path (str): path to 1-entry-per-line dataset (e.g., 'train.senti')
+        dictionary (~fairseq.data.Dictionary): data dictionary
+        dataset_impl (str, optional): which dataset implementation to use.
     """
     if dataset_impl != 'raw':
         raise Exception(
@@ -111,13 +116,11 @@ def load_and_map_simple_dataset(path, dictionary, dataset_impl=None):
         try:
             data = [dictionary[int(i.strip())] for i in f.readlines()]
         except:
-            raise Exception(
-                f'Expected input dataset values to be of type int...')
-        # try:
-        #     data = [int(i.strip()) for i in f.readlines()]
-        # except:
-        #     data = [i.strip() for i in f.readlines()]
-        # values = [i.strip() for i in f.readlines()]
+            try:
+                data = [dictionary[i.strip()] for i in f.readlines()]
+            except:
+                raise Exception(
+                    f'Could not fetch dict values for input dataset items!')
     return data
 
 
