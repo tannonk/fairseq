@@ -14,14 +14,21 @@ and plots training and validation progress
 Example call:
     python3 plot_fairseq_training_log.py log_file plot_file
 
+with two log files:
+    python3 plot_fairseq_training_log.py /srv/scratch2/kew/fairseq_materials/rrgen/de/ft100_rg/train.log /srv/scratch2/kew/fairseq_materials/rrgen/de/ft100_rg/train_cont.log /srv/scratch2/kew/fairseq_materials/rrgen/de/ft100_rg/train_plot_2.png
+
 
 """
 
-log_file = sys.argv[1]
-outfile = sys.argv[2]
+log_files = sys.argv[1:-1] # takes one or more log files (e.g. for interrupted/continued training logs)
+outfile = sys.argv[-1]
 
 # for testing
-# log_file = '/home/user/kew/nohup.out'
+# log_files = ['/home/user/kew/nohup.out']
+# print(log_files)
+# print(outfile)
+
+# sys.exit()
 
 # regex patterns for ID-ing/parsing lines
 tr_inner = re.compile(r'\| INFO \| train_inner \|')
@@ -62,30 +69,41 @@ train = []
 valid = []
 train_inner = []
 
-with open(log_file, 'r', encoding='utf8') as f:
-    for line in f:
-        line = line[19:].strip()
-        if re.search(tr, line):
-            train.append(parse_train_val_line(line))
-        elif re.search(va, line):
-            valid.append(parse_train_val_line(line))
-        elif re.search(tr_inner, line):
-            train_inner.append(parse_training_line(line))
+for log_file in log_files:
+    with open(log_file, 'r', encoding='utf8') as f:
+        for line in f:
+            # 2020-09-19 13:32:40 | INFO | train_inner | ...
+            line = line[19:].strip()
+            if re.search(tr, line):
+                train.append(parse_train_val_line(line))
+            elif re.search(va, line):
+                valid.append(parse_train_val_line(line))
+            elif re.search(tr_inner, line):
+                train_inner.append(parse_training_line(line))
 
-
+# epoch stats
 train_progress = pd.DataFrame(train)
 valid_progress = pd.DataFrame(valid)
+# merge progress dfs into one for ease of plotting
+epoch_df = train_progress.merge(valid_progress, how='left', on='epoch', suffixes=('_train', '_validation'))
+# print(epoch_df)
+
+# step stats
 train_details = pd.DataFrame(train_inner)
+
 
 # plot dataframes
 fig, axes = plt.subplots(1, 3, figsize=(20, 4))
-train_progress.plot.line(x='epoch', y=[
-                         'loss', 'ppl'], logy=True, ax=axes[0], xticks=train_progress['epoch'])
-valid_progress.plot.line(x='epoch', y=[
-                         'loss', 'ppl'], logy=True, ax=axes[1], xticks=valid_progress['epoch'])
+
+epoch_df.plot.line(x='epoch', y=['loss_train', 'loss_validation'], logy=False, ax=axes[0], xticks=epoch_df['epoch'])
+axes[0].title.set_text('Loss / Epoch')
+
+epoch_df.plot.line(x='epoch', y=['ppl_train', 'ppl_validation'], logy=False, ax=axes[1], xticks=epoch_df['epoch'])
+axes[1].title.set_text('PPL / Epoch')
+
 train_details.plot.line(
     x='num_updates', y=['loss', 'ppl'], logy=True, ax=axes[2])
-
+axes[2].title.set_text('Training set / updates')
 # if outfile:
 plt.savefig(outfile)
 print(f'Saved plots to {outfile}')
