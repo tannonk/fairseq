@@ -241,10 +241,18 @@ class FairseqTask(object):
                 compute_alignment=getattr(args, "print_alignment", False),
             )
 
-        from fairseq.sequence_generator import (
+        # if using rrgen task, import from custom
+        # sequence_generator script (Non-breaking!)
+        if args.task == "rrgen_translation":
+            from fairseq.sequence_generator_rrgen import (
             SequenceGenerator,
             SequenceGeneratorWithAlignment,
-        )
+            )
+        else:
+            from fairseq.sequence_generator import (
+                SequenceGenerator,
+                SequenceGeneratorWithAlignment,
+            )
 
         # Choose search strategy. Defaults to Beam Search.
         sampling = getattr(args, "sampling", False)

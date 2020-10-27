@@ -14,6 +14,9 @@ import warnings
 from collections import OrderedDict
 from typing import Any, Dict, Mapping
 
+# bugfix for multi-gpu training https://github.com/pytorch/pytorch/issues/37377 
+os.environ['MKL_THREADING_LAYER'] = 'GNU'
+
 import torch
 import torch.distributed as dist
 
