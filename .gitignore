@@ -132,5 +132,10 @@ data-bin/
 # Experimental Folder
 experimental/*
 
+# user added
+apex/
+._*
+examples/translation/
+
 # Weights and Biases logs
 wandb/
