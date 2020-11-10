@@ -7,25 +7,22 @@ import logging
 
 import numpy as np
 import torch
-
 from fairseq.data import Dictionary, FairseqDataset
-from fairseq.tasks import FairseqTask, register_task
+from fairseq.tasks import LegacyFairseqTask, register_task
 
 
 logger = logging.getLogger(__name__)
 
 
-@register_task('dummy_mt')
-class DummyMTTask(FairseqTask):
-
+@register_task("dummy_mt")
+class DummyMTTask(LegacyFairseqTask):
     @staticmethod
     def add_args(parser):
         """Add task-specific arguments to the parser."""
-        parser.add_argument('--dict-size', default=49996, type=int)
-        parser.add_argument('--dataset-size', default=100000, type=int)
-        parser.add_argument('--tokens-per-sample', default=512, type=int,
-                            help='max number of total tokens over all segments '
-                                 'per sample for BERT dataset')
+        parser.add_argument("--dict-size", default=49996, type=int)
+        parser.add_argument("--dataset-size", default=100000, type=int)
+        parser.add_argument("--src-len", default=30, type=int)
+        parser.add_argument("--tgt-len", default=30, type=int)
 
     def __init__(self, args, dictionary):
         super().__init__(args)
@@ -34,18 +31,20 @@ class DummyMTTask(FairseqTask):
 
         dictionary.pad_to_multiple_(8)  # often faster if divisible by 8
 
-        seq = torch.arange(args.tokens_per_sample + 1) + dictionary.pad() + 1
-
-        self.dummy_src = seq[:-1]
-        self.dummy_tgt = seq[1:]
+        self.dummy_src = torch.arange(args.src_len + 1) + dictionary.pad() + 1
+        self.dummy_tgt = torch.arange(args.tgt_len + 1) + dictionary.pad() + 1
 
     @classmethod
     def setup_task(cls, args, **kwargs):
         """Setup the task. """
         dictionary = Dictionary()
         for i in range(args.dict_size):
-            dictionary.add_symbol('word{}'.format(i))
-        logger.info('dictionary: {} types'.format(len(dictionary)))
+            dictionary.add_symbol("word{}".format(i))
+        logger.info("dictionary: {} types".format(len(dictionary)))
+
+        args.max_source_positions = args.src_len + dictionary.pad() + 2
+        args.max_target_positions = args.tgt_len + dictionary.pad() + 2
+
         return cls(args, dictionary)
 
     def load_dataset(self, split, epoch=1, combine=False, **kwargs):
@@ -53,27 +52,28 @@ class DummyMTTask(FairseqTask):
         Args:
             split (str): name of the split (e.g., train, valid, test)
         """
-        if self.args.max_sentences is not None:
-            bsz = self.args.max_sentences
+        item_size = max(self.args.src_len, self.args.tgt_len)
+        if self.args.batch_size is not None:
+            bsz = self.args.batch_size
         else:
-            bsz = max(1, self.args.max_tokens // self.args.tokens_per_sample)
+            bsz = max(1, self.args.max_tokens // item_size)
         tgt = torch.stack([self.dummy_tgt for _ in range(bsz)])
         self.datasets[split] = DummyDataset(
             {
-                'id': 1,
-                'net_input': {
-                    'src_tokens': torch.stack([self.dummy_src for _ in range(bsz)]),
-                    'src_lengths': torch.full(
-                        (bsz, ), self.args.tokens_per_sample, dtype=torch.long
+                "id": 1,
+                "net_input": {
+                    "src_tokens": torch.stack([self.dummy_src for _ in range(bsz)]),
+                    "src_lengths": torch.full(
+                        (bsz,), self.args.src_len, dtype=torch.long
                     ),
-                    'prev_output_tokens': tgt.clone(),
+                    "prev_output_tokens": tgt.clone(),
                 },
-                'target': tgt,
-                'nsentences': bsz,
-                'ntokens': bsz * self.args.tokens_per_sample,
+                "target": tgt,
+                "nsentences": bsz,
+                "ntokens": bsz * self.args.tgt_len,
             },
             num_items=self.args.dataset_size,
-            item_size=self.args.tokens_per_sample,
+            item_size=item_size,
         )
 
     @property
@@ -86,7 +86,6 @@ class DummyMTTask(FairseqTask):
 
 
 class DummyDataset(FairseqDataset):
-
     def __init__(self, batch, num_items, item_size):
         super().__init__()
         self.batch = batch
