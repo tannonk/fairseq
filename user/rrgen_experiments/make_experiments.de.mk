@@ -26,14 +26,14 @@ binarize_data_remove_greetings:
 # ---------
 
 train_ft100_rg: $(EXP_DIR)/ft100_rg
-	CUDA_VISIBLE_DEVICES=6 \
+	CUDA_VISIBLE_DEVICES=3 \
 	nohup \
 	fairseq-train \
 	$(EXP_DIR)/data_bin_rg/ \
 	--arch rrgen_lstm_arch \
 	--task rrgen_translation \
 	--dataset-impl mmap \
-	--max-epoch 18 \
+	--max-epoch 52 \
 	--max-tokens 1000 \
 	--max-source-positions 400 \
 	--max-target-positions 400 \
@@ -46,7 +46,7 @@ train_ft100_rg: $(EXP_DIR)/ft100_rg
 	--encoder-hidden-size 200 \
 	--decoder-hidden-size 200 \
 	--skip-invalid-size-inputs-valid-test \
-	--save-dir $</checkpoints > $</train_cont.log &
+	--save-dir $</checkpoints > $</logs/train_cont_e52.log &
 
 # ---------
 # DECODING: baseline LSTM - no A-components
