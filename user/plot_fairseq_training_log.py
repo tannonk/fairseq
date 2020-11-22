@@ -2,6 +2,7 @@
 # coding: utf-8
 
 import sys
+import argparse
 import re
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -15,13 +16,25 @@ Example call:
     python3 plot_fairseq_training_log.py log_file plot_file
 
 with two log files:
-    python3 plot_fairseq_training_log.py /srv/scratch2/kew/fairseq_materials/rrgen/de/ft100_rg/train.log /srv/scratch2/kew/fairseq_materials/rrgen/de/ft100_rg/train_cont.log /srv/scratch2/kew/fairseq_materials/rrgen/de/ft100_rg/train_plot_2.png
+    python3 plot_fairseq_training_log.py --logs
+    /srv/scratch2/kew/fairseq_materials/rrgen/de/ft100_rg/train.log
+    /srv/scratch2/kew/fairseq_materials/rrgen/de/ft100_rg/train_cont.log
+    --outfile
+    /srv/scratch2/kew/fairseq_materials/rrgen/de/ft100_rg/train_plot_2.png
+    --title "this is the title"
 
 
 """
 
-log_files = sys.argv[1:-1] # takes one or more log files (e.g. for interrupted/continued training logs)
-outfile = sys.argv[-1]
+ap = argparse.ArgumentParser()
+ap.add_argument('-l', '--logs', required=True, nargs='*', help='fairseq training log files')
+ap.add_argument('-o', '--outfile', required=True, help = 'path for output plot')
+ap.add_argument('-t', '--title', default=None, help = 'plot title')
+args = ap.parse_args()
+
+log_files = args.logs # takes one or more log files (e.g. for interrupted/continued training logs)
+outfile = args.outfile
+plot_title = args.title
 
 # for testing
 # log_files = ['/home/user/kew/nohup.out']
@@ -95,15 +108,37 @@ train_details = pd.DataFrame(train_inner)
 # plot dataframes
 fig, axes = plt.subplots(1, 3, figsize=(20, 4))
 
-epoch_df.plot.line(x='epoch', y=['loss_train', 'loss_validation'], logy=False, ax=axes[0], xticks=epoch_df['epoch'])
-axes[0].title.set_text('Loss / Epoch')
+epoch_df.plot.line(x='epoch', y=['loss_train', 'loss_validation'], logy=False, ax=axes[0])
+axes[0].legend(['Train Loss', 'Valid Loss'])
+axes[0].title.set_text('Model Loss')
+axes[0].set_ylabel('Loss')
+axes[0].set_xlabel('Epoch')
 
-epoch_df.plot.line(x='epoch', y=['ppl_train', 'ppl_validation'], logy=False, ax=axes[1], xticks=epoch_df['epoch'])
-axes[1].title.set_text('PPL / Epoch')
+
+epoch_df.plot.line(x='epoch', y=['ppl_train', 'ppl_validation'], logy=False, ax=axes[1])
+axes[1].legend(['Train PPL', 'Valid PPL'])
+axes[1].title.set_text('Model Perplexity')
+axes[1].set_ylabel('Perplexity')
+axes[1].set_xlabel('Epoch')
 
 train_details.plot.line(
     x='num_updates', y=['loss', 'ppl'], logy=True, ax=axes[2])
-axes[2].title.set_text('Training set / updates')
+axes[2].legend(['Loss', 'PPL'])
+axes[2].title.set_text('Model Updates')
+axes[2].set_xlabel('Updates')
+
+
+if len(epoch_df['epoch']) > 10:
+    num_epochs = len(epoch_df['epoch'])
+    epoch_ticks = list(range(0, num_epochs, int(num_epochs/10)))
+else:
+    epoch_ticks = epoch_df['epoch']
+
+axes[0].set_xticks(epoch_ticks)
+axes[1].set_xticks(epoch_ticks)
+# axes[2].set_xticks(epoch_ticks)
+fig.suptitle(plot_title)
+
 # if outfile:
-plt.savefig(outfile)
+plt.savefig(outfile, bbox_inches="tight")
 print(f'Saved plots to {outfile}')
