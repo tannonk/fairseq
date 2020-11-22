@@ -130,18 +130,33 @@ def load_rrgen_dataset(
         # pdb.set_trace()
 
         if use_sentiment:
-            if not split_exists(split_k, src, tgt, use_sentiment, data_path) and not split_exists(split_k, tgt, src, use_sentiment, data_path):
-                raise FileNotFoundError(
-                    'Ext {} dataset not found: {} ({})'.format(use_sentiment, split, data_path))
-            prefix = os.path.join(
-                data_path, '{}.{}-{}.'.format(split_k, src, tgt))
-            if dataset_impl != 'raw': # hack for handling both 'raw' and binarized datasets
-                senti_dataset = data_utils.load_indexed_dataset(
-                    prefix + use_sentiment, ext_senti_dict, dataset_impl)
-            else:
-                senti_dataset = data_utils.load_and_map_simple_dataset(
-                    prefix + use_sentiment, ext_senti_dict, dataset_impl
-                )
+
+            if use_sentiment == 'alpha_sentiment' and dataset_impl == 'raw':
+                
+                if not split_exists(split_k, src, tgt, use_sentiment, data_path) and not split_exists(split_k, tgt, src, use_sentiment, data_path):
+                    raise FileNotFoundError('Ext {} dataset not found: {} ({})'.format(use_sentiment, split, data_path))
+                
+                prefix = os.path.join(
+                    data_path, '{}.{}-{}.'.format(split_k, src, tgt))
+
+                # alpha-systems sentiment annotations
+                senti_dataset = np.loadtxt(prefix + use_sentiment)
+
+            elif use_sentiment == 'sentiment':
+                if not split_exists(split_k, src, tgt, use_sentiment, data_path) and not split_exists(split_k, tgt, src, use_sentiment, data_path):
+                    raise FileNotFoundError(
+                        'Ext {} dataset not found: {} ({})'.format(use_sentiment, split, data_path))
+                prefix = os.path.join(
+                    data_path, '{}.{}-{}.'.format(split_k, src, tgt))
+                
+                if dataset_impl != 'raw': # hack for handling both 'raw' and binarized datasets
+                    senti_dataset = data_utils.load_indexed_dataset(
+                        prefix + use_sentiment, ext_senti_dict, dataset_impl)
+                else:
+                    senti_dataset = data_utils.load_and_map_simple_dataset(
+                        prefix + use_sentiment, ext_senti_dict, dataset_impl
+                    )
+                
         else:
             senti_dataset = None
 
@@ -420,10 +435,16 @@ class RRGenTranslationTask(FairseqTask):
             args.target_lang, len(tgt_dict)))
 
         if args.use_sentiment is not None:
-            ext_senti_dict = cls.load_normalisation_dictionary(os.path.join(
-                paths[0], 'dict.{}.txt'.format(args.use_sentiment)))
-            logger.info('[{}] dictionary: {} types'.format(args.use_sentiment,
-                                                           len(ext_senti_dict)))
+
+            # account for single sentiment value input
+            if args.use_sentiment == 'sentiment':
+                ext_senti_dict = cls.load_normalisation_dictionary(os.path.join(
+                    paths[0], 'dict.{}.txt'.format(args.use_sentiment)))
+                logger.info('[{}] dictionary: {} types'.format(args.use_sentiment,
+                                                            len(ext_senti_dict)))
+            else:
+                ext_senti_dict = None
+
         else:
             ext_senti_dict = None
 

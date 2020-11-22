@@ -112,19 +112,26 @@ def collate(
     # pdb.set_trace()
 
     # A-Component inputs are stored as tensors of size (batch_size)
+    # NOTE: stacking tensors provides shape (bsz,
+    # size_of_feature)
+    # e.g. (4, 25) for alpha_sentiment vs. (4, 1) for scalar
+    # sentiment
 
     try:
-        ext_senti = torch.FloatTensor([s['ext_senti'] for s in samples])
+        ext_senti = torch.stack([s['ext_senti'] for s in samples])
+    #     ext_senti = torch.FloatTensor([s['ext_senti'] for s in samples])
     except:
         ext_senti = None
 
     try:
-        ext_cate = torch.FloatTensor([s['ext_cate'] for s in samples])
+        ext_cate = torch.stack([s['ext_cate'] for s in samples])
+        # ext_cate = torch.FloatTensor([s['ext_cate'] for s in samples])
     except:
         ext_cate = None
 
     try:
-        ext_rate = torch.FloatTensor([s['ext_rate'] for s in samples])
+        ext_rate = torch.stack([s['ext_rate'] for s in samples])
+        # ext_rate = torch.FloatTensor([s['ext_rate'] for s in samples])
     except:
         ext_rate = None
 
@@ -342,13 +349,16 @@ class RRGenDataset(FairseqDataset):
         # import pdb
         # pdb.set_trace()
 
+        # alpha-sentiment: can not perform truth checking on np array, so
+        # check explicitly
+        if isinstance(self.ext_senti, np.ndarray):
+            ext_senti_item = torch.from_numpy(np.float32(self.ext_senti[index]))
+
         # NOTE ext attribute features are torch.Tensors, if loaded
         # using binarized data-impl (e.g. mmap, lazy, etc).
         # These need to be 'encoded' using the normalised
-        # mapping dictionaries
-
-        if self.ext_senti and self.ext_senti_dict:
-
+        # mapping dictionaries        
+        elif self.ext_senti and self.ext_senti_dict:
             # binarized datasets use Tensors and require
             # mapping to normalised input value in
             # corresponding dictionary
@@ -356,10 +366,6 @@ class RRGenDataset(FairseqDataset):
                 ext_senti_item = torch.Tensor(
                     [self.ext_senti_dict[self.ext_senti[index].item()]])
 
-            # elif isinstance(self.ext_senti[index], str):
-            #     ext_senti_item = torch.Tensor([self.ext_senti_dict[str(self.ext_senti[index])])
-            # elif isinstance(self.ext_senti[index], int):
-            #     ext_senti_item = torch.Tensor([self.ext_senti_dict[self.ext_senti[index]])
             elif isinstance(self.ext_senti[index], float):
                 # no lookup required just convert to tensor
                 # NOTE: mapping to normalised input value is done in data_utils.load_and_map_simple_dataset

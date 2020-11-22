@@ -210,13 +210,13 @@ class LSTMModel(FairseqEncoderDecoderModel):
 
     def forward(
         self,
-        src_tokens,
-        src_lengths,
-        prev_output_tokens,
-        ext_senti=None,
-        ext_cate=None,
-        ext_rate=None,
-        target=None,
+        src_tokens: Tensor,
+        src_lengths: Tensor,
+        prev_output_tokens: Tensor,
+        ext_senti: Optional[Tensor] = None,
+        ext_cate: Optional[Tensor] = None,
+        ext_rate: Optional[Tensor] = None,
+        target: Optional[Tensor] = None,
         incremental_state: Optional[Dict[str, Dict[str, Optional[Tensor]]]] = None,
     ):
 
@@ -461,7 +461,10 @@ class RRGenLSTMDecoder(FairseqIncrementalDecoder):
 
         if self.tie_ext_features:
             if self.use_senti:
-                self.tie_ext_feature_size += 1
+                # self.tie_ext_feature_size += 1
+                # for alpha_seystems sentiment, we expect
+                # the sentiment attribute to be a 25d vector
+                self.tie_ext_feature_size += 25
             if self.use_rate:
                 self.tie_ext_feature_size += 1
             if self.use_cate:
@@ -589,12 +592,12 @@ class RRGenLSTMDecoder(FairseqIncrementalDecoder):
         elif encoder_out is not None:
             # setup recurrent cells
 
-            if self.use_senti and ext_senti is not None:
-                encoder_hiddens, encoder_cells = self.extend_hidden_state(
-                    encoder_hiddens, encoder_cells, ext_senti)
             if self.use_cate and ext_cate is not None:
                 encoder_hiddens, encoder_cells = self.extend_hidden_state(
                     encoder_hiddens, encoder_cells, ext_cate)
+            if self.use_senti and ext_senti is not None:
+                encoder_hiddens, encoder_cells = self.extend_hidden_state(
+                    encoder_hiddens, encoder_cells, ext_senti)
             if self.use_rate and ext_rate is not None:
                 encoder_hiddens, encoder_cells = self.extend_hidden_state(
                     encoder_hiddens, encoder_cells, ext_rate)
@@ -780,6 +783,7 @@ class RRGenLSTMDecoder(FairseqIncrementalDecoder):
             encoder_hiddens : final encoder hidden states
             encoder_cells : final encoder hidden cells
             ext_vector : attribute features, e.g. sentiment,
+            category, rating
         """
 
         # import pdb
@@ -791,12 +795,19 @@ class RRGenLSTMDecoder(FairseqIncrementalDecoder):
 
         # concatenate attribute features with
         # encoder hidden states
-        encoder_hiddens = [
-            torch.cat((h, v.unsqueeze(-1)), 1) for h, v in zip(encoder_hiddens, ext_atts)]
-        encoder_cells = [
-            torch.cat((c, v.unsqueeze(-1)), 1) for c, v in zip(encoder_cells, ext_atts)]
+        # encoder_hiddens = [torch.cat((h, v.unsqueeze(-1)), 1) for h, v in zip(encoder_hiddens, ext_atts)]
+        # encoder_hiddens = [torch.cat((h, ext_atts), 1) for h in encoder_hiddens]
+        new_hiddens = []
+        for hidden in encoder_hiddens:
+            new_hiddens.append(torch.cat((hidden, ext_atts), 1))
 
-        return encoder_hiddens, encoder_cells
+        # encoder_cells = [torch.cat((c, v.unsqueeze(-1)), 1) for c, v in zip(encoder_cells, ext_atts)]
+        # encoder_cells = [torch.cat((c, ext_atts), 1) for h in encoder_cells]
+        new_cells = []
+        for cell in encoder_cells:
+            new_cells.append(torch.cat((cell, ext_atts), 1))
+        
+        return new_hiddens, new_cells
 
 
 def Embedding(num_embeddings, embedding_dim, padding_idx):

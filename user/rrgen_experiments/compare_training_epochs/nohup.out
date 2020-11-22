@@ -1,0 +1,83 @@
+[!] Either /srv/scratch2/kew/fairseq_materials/rrgen/de/ft100_rg/inference/decode_epoch_03.txt already exists or no model checkpoint available. Skipping...
+[!] Either /srv/scratch2/kew/fairseq_materials/rrgen/de/ft100_rg/inference/decode_epoch_06.txt already exists or no model checkpoint available. Skipping...
+[!] Either /srv/scratch2/kew/fairseq_materials/rrgen/de/ft100_rg/inference/decode_epoch_09.txt already exists or no model checkpoint available. Skipping...
+[!] Either /srv/scratch2/kew/fairseq_materials/rrgen/de/ft100_rg/inference/decode_epoch_12.txt already exists or no model checkpoint available. Skipping...
+[!] Either /srv/scratch2/kew/fairseq_materials/rrgen/de/ft100_rg/inference/decode_epoch_15.txt already exists or no model checkpoint available. Skipping...
+[!] Either /srv/scratch2/kew/fairseq_materials/rrgen/de/ft100_rg/inference/decode_epoch_18.txt already exists or no model checkpoint available. Skipping...
+--------------- BEGIN DECODE EPOCH 21 ---------------
+/home/user/kew/INSTALLS/ffairseq/fairseq/sequence_generator_rrgen.py:429: UserWarning: This overload of nonzero is deprecated:
+	nonzero()
+Consider using one of the following signatures instead:
+	nonzero(*, bool as_tuple) (Triggered internally at  /opt/conda/conda-bld/pytorch_1595629395347/work/torch/csrc/utils/python_arg_parser.cpp:766.)
+  batch_idxs = batch_mask.nonzero().squeeze(-1)
+--------------- FINISH DECODE EPOCH 21 ---------------
+--------------- BEGIN DECODE EPOCH 24 ---------------
+/home/user/kew/INSTALLS/ffairseq/fairseq/sequence_generator_rrgen.py:429: UserWarning: This overload of nonzero is deprecated:
+	nonzero()
+Consider using one of the following signatures instead:
+	nonzero(*, bool as_tuple) (Triggered internally at  /opt/conda/conda-bld/pytorch_1595629395347/work/torch/csrc/utils/python_arg_parser.cpp:766.)
+  batch_idxs = batch_mask.nonzero().squeeze(-1)
+--------------- FINISH DECODE EPOCH 24 ---------------
+--------------- BEGIN DECODE EPOCH 27 ---------------
+/home/user/kew/INSTALLS/ffairseq/fairseq/sequence_generator_rrgen.py:429: UserWarning: This overload of nonzero is deprecated:
+	nonzero()
+Consider using one of the following signatures instead:
+	nonzero(*, bool as_tuple) (Triggered internally at  /opt/conda/conda-bld/pytorch_1595629395347/work/torch/csrc/utils/python_arg_parser.cpp:766.)
+  batch_idxs = batch_mask.nonzero().squeeze(-1)
+--------------- FINISH DECODE EPOCH 27 ---------------
+--------------- BEGIN DECODE EPOCH 30 ---------------
+/home/user/kew/INSTALLS/ffairseq/fairseq/sequence_generator_rrgen.py:429: UserWarning: This overload of nonzero is deprecated:
+	nonzero()
+Consider using one of the following signatures instead:
+	nonzero(*, bool as_tuple) (Triggered internally at  /opt/conda/conda-bld/pytorch_1595629395347/work/torch/csrc/utils/python_arg_parser.cpp:766.)
+  batch_idxs = batch_mask.nonzero().squeeze(-1)
+--------------- FINISH DECODE EPOCH 30 ---------------
+--------------- BEGIN DECODE EPOCH 33 ---------------
+/home/user/kew/INSTALLS/ffairseq/fairseq/sequence_generator_rrgen.py:429: UserWarning: This overload of nonzero is deprecated:
+	nonzero()
+Consider using one of the following signatures instead:
+	nonzero(*, bool as_tuple) (Triggered internally at  /opt/conda/conda-bld/pytorch_1595629395347/work/torch/csrc/utils/python_arg_parser.cpp:766.)
+  batch_idxs = batch_mask.nonzero().squeeze(-1)
+--------------- FINISH DECODE EPOCH 33 ---------------
+--------------- BEGIN DECODE EPOCH 36 ---------------
+/home/user/kew/INSTALLS/ffairseq/fairseq/sequence_generator_rrgen.py:429: UserWarning: This overload of nonzero is deprecated:
+	nonzero()
+Consider using one of the following signatures instead:
+	nonzero(*, bool as_tuple) (Triggered internally at  /opt/conda/conda-bld/pytorch_1595629395347/work/torch/csrc/utils/python_arg_parser.cpp:766.)
+  batch_idxs = batch_mask.nonzero().squeeze(-1)
+--------------- FINISH DECODE EPOCH 36 ---------------
+--------------- BEGIN DECODE EPOCH 39 ---------------
+/home/user/kew/INSTALLS/ffairseq/fairseq/sequence_generator_rrgen.py:429: UserWarning: This overload of nonzero is deprecated:
+	nonzero()
+Consider using one of the following signatures instead:
+	nonzero(*, bool as_tuple) (Triggered internally at  /opt/conda/conda-bld/pytorch_1595629395347/work/torch/csrc/utils/python_arg_parser.cpp:766.)
+  batch_idxs = batch_mask.nonzero().squeeze(-1)
+--------------- FINISH DECODE EPOCH 39 ---------------
+--------------- BEGIN DECODE EPOCH 42 ---------------
+/home/user/kew/INSTALLS/ffairseq/fairseq/sequence_generator_rrgen.py:429: UserWarning: This overload of nonzero is deprecated:
+	nonzero()
+Consider using one of the following signatures instead:
+	nonzero(*, bool as_tuple) (Triggered internally at  /opt/conda/conda-bld/pytorch_1595629395347/work/torch/csrc/utils/python_arg_parser.cpp:766.)
+  batch_idxs = batch_mask.nonzero().squeeze(-1)
+--------------- FINISH DECODE EPOCH 42 ---------------
+--------------- BEGIN DECODE EPOCH 45 ---------------
+/home/user/kew/INSTALLS/ffairseq/fairseq/sequence_generator_rrgen.py:429: UserWarning: This overload of nonzero is deprecated:
+	nonzero()
+Consider using one of the following signatures instead:
+	nonzero(*, bool as_tuple) (Triggered internally at  /opt/conda/conda-bld/pytorch_1595629395347/work/torch/csrc/utils/python_arg_parser.cpp:766.)
+  batch_idxs = batch_mask.nonzero().squeeze(-1)
+--------------- FINISH DECODE EPOCH 45 ---------------
+--------------- BEGIN DECODE EPOCH 48 ---------------
+/home/user/kew/INSTALLS/ffairseq/fairseq/sequence_generator_rrgen.py:429: UserWarning: This overload of nonzero is deprecated:
+	nonzero()
+Consider using one of the following signatures instead:
+	nonzero(*, bool as_tuple) (Triggered internally at  /opt/conda/conda-bld/pytorch_1595629395347/work/torch/csrc/utils/python_arg_parser.cpp:766.)
+  batch_idxs = batch_mask.nonzero().squeeze(-1)
+--------------- FINISH DECODE EPOCH 48 ---------------
+--------------- BEGIN DECODE EPOCH 51 ---------------
+/home/user/kew/INSTALLS/ffairseq/fairseq/sequence_generator_rrgen.py:429: UserWarning: This overload of nonzero is deprecated:
+	nonzero()
+Consider using one of the following signatures instead:
+	nonzero(*, bool as_tuple) (Triggered internally at  /opt/conda/conda-bld/pytorch_1595629395347/work/torch/csrc/utils/python_arg_parser.cpp:766.)
+  batch_idxs = batch_mask.nonzero().squeeze(-1)
+--------------- FINISH DECODE EPOCH 51 ---------------
