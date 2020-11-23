@@ -1,43 +1,28 @@
-#!/usr/bin/env python3
-# -*- coding: utf8 -*-
-
-import torch
 import torch.nn as nn
+import torch
 from fairseq import utils
-from fairseq.models import FairseqEncoder, FairseqDecoder, FairseqEncoderDecoderModel, register_model, register_model_architecture, FairseqIncrementalDecoder
+from fairseq.models import FairseqEncoder
+from fairseq.models import FairseqDecoder
+from fairseq.models import FairseqEncoderDecoderModel, register_model
+from fairseq.models import register_model_architecture
 
-"""
-
-Tutorial from: https://fairseq.readthedocs.io/en/latest/tutorial_simple_lstm.html
-
-To train, use the existing fairseq-train command-line tool, making sure to specify our new Model architecture (--arch tutorial_simple_lstm).
-
-
-"""
+'''The one I worked with'''
 
 
 class SimpleLSTMEncoder(FairseqEncoder):
 
     def __init__(
-        self,
-        args,
-        dictionary,
-        embed_dim=128,
-        hidden_dim=128,
-        dropout=0.1
+        self, args, dictionary, embed_dim=128, hidden_dim=128, dropout=0.1,
     ):
-
         super().__init__(dictionary)
         self.args = args
 
-        # encoder will embed the inputs before feeding them
-        # to the LSTM.
+        # Our encoder will embed the inputs before feeding them to the LSTM.
         self.embed_tokens = nn.Embedding(
             num_embeddings=len(dictionary),
             embedding_dim=embed_dim,
             padding_idx=dictionary.pad(),
         )
-
         self.dropout = nn.Dropout(p=dropout)
 
         # We'll use a single-layer, unidirectional LSTM for simplicity.
@@ -46,6 +31,7 @@ class SimpleLSTMEncoder(FairseqEncoder):
             hidden_size=hidden_dim,
             num_layers=1,
             bidirectional=False,
+            batch_first=True,
         )
 
     def forward(self, src_tokens, src_lengths):
@@ -58,8 +44,7 @@ class SimpleLSTMEncoder(FairseqEncoder):
         # Note that the source is typically padded on the left. This can be
         # configured by adding the `--left-pad-source "False"` command-line
         # argument, but here we'll make the Encoder handle either kind of
-        # padding by converting everything to be
-        # right-padded.
+        # padding by converting everything to be right-padded.
         if self.args.left_pad_source:
             # Convert left-padding to right-padding.
             src_tokens = utils.convert_padding_direction(
@@ -71,7 +56,7 @@ class SimpleLSTMEncoder(FairseqEncoder):
         # Embed the source.
         x = self.embed_tokens(src_tokens)
 
-        # Apply dropout
+        # Apply dropout.
         x = self.dropout(x)
 
         # Pack the sequence into a PackedSequence object to feed to the LSTM.
@@ -83,7 +68,7 @@ class SimpleLSTMEncoder(FairseqEncoder):
         # Return the Encoder's output. This can be any object and will be
         # passed directly to the Decoder.
         return {
-            # this will have shape `(batch_size, hidden_dim)`
+            # this will have shape `(bsz, hidden_dim)`
             'final_hidden': final_hidden.squeeze(0),
         }
 
@@ -106,116 +91,104 @@ class SimpleLSTMEncoder(FairseqEncoder):
         }
 
 
-class SimpleLSTMDecoder(FairseqIncrementalDecoder):
-    """
-    Vanilla encoder WITH incremental decoding for speed up.
-    Second example from https://fairseq.readthedocs.io/en/latest/tutorial_simple_lstm.html#training-the-model
-    """
+class SimpleLSTMDecoder(FairseqDecoder):
 
     def __init__(
-        self,
-        dictionary,
+        self, dictionary,
         encoder_hidden_dim=128,
         embed_dim=128,
         hidden_dim=128,
         dropout=0.1,
     ):
-        # This remains the same as before.
         super().__init__(dictionary)
 
+        # Our decoder will embed the inputs before feeding them to the LSTM.
         self.embed_tokens = nn.Embedding(
             num_embeddings=len(dictionary),
             embedding_dim=embed_dim,
             padding_idx=dictionary.pad(),
         )
-
         self.dropout = nn.Dropout(p=dropout)
 
+        # We'll use a single-layer, unidirectional LSTM for simplicity.
         self.lstm = nn.LSTM(
+            # For the first layer we'll concatenate the Encoder's final hidden
+            # state with the embedded target tokens.
             input_size=encoder_hidden_dim + embed_dim,
             hidden_size=hidden_dim,
             num_layers=1,
             bidirectional=False,
         )
 
+        # Define the output projection.
         self.output_projection = nn.Linear(hidden_dim, len(dictionary))
 
-    def forward(self, prev_output_tokens, encoder_out, incremental_state=None):
+    # During training Decoders are expected to take the entire target sequence
+    # (shifted right by one position) and produce logits over the vocabulary.
+    # The *prev_output_tokens* tensor begins with the end-of-sentence symbol,
+    # ``dictionary.eos()``, followed by the target sequence.
+    def forward(self, prev_output_tokens, encoder_out):
         """
-        Note additional kwarg `incremental_state` that can be used to cache state across time-steps
-        """
-        if incremental_state is not None:
-            # If the *incremental_state* argument is not ``None`` then we are
-            # in incremental inference mode. While *prev_output_tokens* will
-            # still contain the entire decoded prefix, we will only use the
-            # last step and assume that the rest of the state is cached.
-            prev_output_tokens = prev_output_tokens[:, -1:]
+        Args:
+            prev_output_tokens (LongTensor): previous decoder outputs of shape
+                `(batch, tgt_len)`, for teacher forcing
+            encoder_out (Tensor, optional): output from the encoder, used for
+                encoder-side attention
 
+        Returns:
+            tuple:
+                - the last decoder layer's output of shape
+                  `(batch, tgt_len, vocab)`
+                - the last decoder layer's attention weights of shape
+                  `(batch, tgt_len, src_len)`
+        """
         bsz, tgt_len = prev_output_tokens.size()
+
+        # Extract the final hidden state from the Encoder.
         final_encoder_hidden = encoder_out['final_hidden']
+
+        # Embed the target sequence, which has been shifted right by one
+        # position and now starts with the end-of-sentence symbol.
         x = self.embed_tokens(prev_output_tokens)
+
+        # Apply dropout.
         x = self.dropout(x)
+
+        # Concatenate the Encoder's final hidden state to *every* embedded
+        # target token.
         x = torch.cat(
             [x, final_encoder_hidden.unsqueeze(1).expand(bsz, tgt_len, -1)],
             dim=2,
         )
 
-        # Check the cache and load the cached previous hidden and
-        # cell states if they exist. Otherwise, initialize them to
-        # zeros (as before) using the ``utils.get_incremental_state()``
-        # and ``utils.set_incremental_state()`` helpers.
-        initial_state = utils.get_incremental_state(
-            self, incremental_state, 'prev_state',
+        # Using PackedSequence objects in the Decoder is harder than in the
+        # Encoder, since the targets are not sorted in descending length order,
+        # which is a requirement of ``pack_padded_sequence()``. Instead we'll
+        # feed nn.LSTM directly.
+        initial_state = (
+            final_encoder_hidden.unsqueeze(0),  # hidden
+            torch.zeros_like(final_encoder_hidden).unsqueeze(0),  # cell
         )
-        if initial_state is None:
-            # first time initialization, same as the original version
-            initial_state = (
-                final_encoder_hidden.unsqueeze(0),  # hidden
-                torch.zeros_like(final_encoder_hidden).unsqueeze(0),  # cell
-            )
-
-        # Run one step of our LSTM.
-        # convert to shape `(tgt_len, bsz, dim)`
-        output, latest_state = self.lstm(x.transpose(0, 1), initial_state)
-
-        # Update the cache with the latest hidden and cell states.
-        utils.set_incremental_state(
-            self, incremental_state, 'prev_state', latest_state,
+        output, _ = self.lstm(
+            x.transpose(0, 1),  # convert to shape `(tgt_len, bsz, dim)`
+            initial_state,
         )
 
-        # This remains the same as before
-        x = output.transpose(0, 1)
+        x = output.transpose(0, 1)  # convert to shape `(bsz, tgt_len, hidden)`
+
+        # Project the outputs to the size of the vocabulary.
         x = self.output_projection(x)
+
+        # Return the logits and ``None`` for the attention weights
         return x, None
 
-    def reorder_incremental_state(self, incremental_state, new_order):
-        """
-        The ``FairseqIncrementalDecoder`` interface also requires implementing a
-        ``reorder_incremental_state()`` method, which is used during beam search
-        to select and reorder the incremental state.
-        """
-        # Load the cached state.
-        prev_state = utils.get_incremental_state(
-            self, incremental_state, 'prev_state',
-        )
 
-        # Reorder batches according to *new_order*.
-        reordered_state = (
-            prev_state[0].index_select(1, new_order),  # hidden
-            prev_state[1].index_select(1, new_order),  # cell
-        )
-
-        # Update the cached state.
-        utils.set_incremental_state(
-            self, incremental_state, 'prev_state', reordered_state,
-        )
-
-
-# class SimpleLSTMDecoder(FairseqDecoder):
+# class SimpleLSTMDecoder(FairseqIncrementalDecoder):
 #     """
-#     Vanilla decoder. First example from https://fairseq.readthedocs.io/en/latest/tutorial_simple_lstm.html#training-the-model
+#     Vanilla encoder WITH incremental decoding for speed up.
+#     This example is from https://fairseq.readthedocs.io/en/latest/tutorial_simple_lstm.html#training-the-model
 #     """
-
+#
 #     def __init__(
 #         self,
 #         dictionary,
@@ -224,108 +197,99 @@ class SimpleLSTMDecoder(FairseqIncrementalDecoder):
 #         hidden_dim=128,
 #         dropout=0.1,
 #     ):
-
+#         # This remains the same as before.
 #         super().__init__(dictionary)
-
-#         # Our decoder will embed the inputs before feeding them to the LSTM.
+#
 #         self.embed_tokens = nn.Embedding(
 #             num_embeddings=len(dictionary),
 #             embedding_dim=embed_dim,
 #             padding_idx=dictionary.pad(),
 #         )
-
+#
 #         self.dropout = nn.Dropout(p=dropout)
-
-#         # Using a single-layer, unidirectional LSTM for simplicity.
+#
 #         self.lstm = nn.LSTM(
-#             # For the first layer we'll concatenate the Encoder's final hidden
-#             # state with the embedded target tokens.
 #             input_size=encoder_hidden_dim + embed_dim,
 #             hidden_size=hidden_dim,
 #             num_layers=1,
 #             bidirectional=False,
 #         )
-
-#         # Define the output projection.
-#         # Applies a linear transformation to the incoming data: y = x*A^T+by
+#
 #         self.output_projection = nn.Linear(hidden_dim, len(dictionary))
-
-#     # During training Decoders are expected to take the entire target sequence
-#     # (shifted right by one position) and produce logits over the vocabulary.
-#     # The *prev_output_tokens* tensor begins with the end-of-sentence symbol,
-#     # ``dictionary.eos()``, followed by the target sequence.
-#     def forward(self, prev_output_tokens, encoder_out):
+#
+#     def forward(self, prev_output_tokens, encoder_out, incremental_state=None):
 #         """
-#         Args:
-#             prev_output_tokens (LongTensor): previous decoder outputs of shape
-#                 `(batch, tgt_len)`, for teacher forcing
-#             encoder_out (Tensor, optional): output from the encoder, used for
-#                 encoder-side attention
-
-#         Returns:
-#             tuple:
-#                 - the last decoder layer's output of shape
-#                   `(batch, tgt_len, vocab)`
-#                 - the last decoder layer's attention weights of shape
-#                   `(batch, tgt_len, src_len)`
+#         Note additional kwarg `incremental_state` that can be used to cache state across time-steps
 #         """
-
+#         if incremental_state is not None:
+#             # If the *incremental_state* argument is not ``None`` then we are
+#             # in incremental inference mode. While *prev_output_tokens* will
+#             # still contain the entire decoded prefix, we will only use the
+#             # last step and assume that the rest of the state is cached.
+#             prev_output_tokens = prev_output_tokens[:, -1:]
+#
 #         bsz, tgt_len = prev_output_tokens.size()
-
-#         # Extract the final hidden state from the Encoder.
 #         final_encoder_hidden = encoder_out['final_hidden']
-
-#         # Embed the target sequence, which has been shifted right by one
-#         # position and now starts with the end-of-sentence symbol.
 #         x = self.embed_tokens(prev_output_tokens)
-
-#         # Apply dropout.
 #         x = self.dropout(x)
-
-#         # Concatenate the Encoder's final hidden state to *every* embedded
-#         # target token.
 #         x = torch.cat(
 #             [x, final_encoder_hidden.unsqueeze(1).expand(bsz, tgt_len, -1)],
 #             dim=2,
 #         )
-
-#         # Using PackedSequence objects in the Decoder is harder than in the
-#         # Encoder, since the targets are not sorted in descending length order,
-#         # which is a requirement of ``pack_padded_sequence()``. Instead we'll
-#         # feed nn.LSTM directly.
-#         initial_state = (
-#             final_encoder_hidden.unsqueeze(0),  # hidden
-#             torch.zeros_like(final_encoder_hidden).unsqueeze(0),  # cell
+#
+#         # Check the cache and load the cached previous hidden and
+#         # cell states if they exist. Otherwise, initialize them to
+#         # zeros (as before) using the ``utils.get_incremental_state()``
+#         # and ``utils.set_incremental_state()`` helpers.
+#         initial_state = utils.get_incremental_state(
+#             self, incremental_state, 'prev_state',
 #         )
-
-#         output, _ = self.lstm(
-#             x.transpose(0, 1),  # convert to shape `(tgt_len, bsz, dim)`
-#             initial_state,
+#         if initial_state is None:
+#             # first time initialization, same as the original version
+#             initial_state = (
+#                 final_encoder_hidden.unsqueeze(0),  # hidden
+#                 torch.zeros_like(final_encoder_hidden).unsqueeze(0),  # cell
+#             )
+#
+#         # Run one step of our LSTM.
+#         # convert to shape `(tgt_len, bsz, dim)`
+#         output, latest_state = self.lstm(x.transpose(0, 1), initial_state)
+#
+#         # Update the cache with the latest hidden and cell states.
+#         utils.set_incremental_state(
+#             self, incremental_state, 'prev_state', latest_state,
 #         )
-
-#         x = output.transpose(0, 1)  # convert to shape `(bsz, tgt_len, hidden)`
-
-#         # Project the outputs to the size of the vocabulary.
+#
+#         # This remains the same as before
+#         x = output.transpose(0, 1)
 #         x = self.output_projection(x)
-
-#         # Return the logits and ``None`` for the attention weights
 #         return x, None
+#
+#     def reorder_incremental_state(self, incremental_state, new_order):
+#         """
+#         The ``FairseqIncrementalDecoder`` interface also requires implementing a
+#         ``reorder_incremental_state()`` method, which is used during beam search
+#         to select and reorder the incremental state.
+#         """
+#         # Load the cached state.
+#         prev_state = utils.get_incremental_state(
+#             self, incremental_state, 'prev_state',
+#         )
+#
+#         # Reorder batches according to *new_order*.
+#         reordered_state = (
+#             prev_state[0].index_select(1, new_order),  # hidden
+#             prev_state[1].index_select(1, new_order),  # cell
+#         )
+#
+#         # Update the cached state.
+#         utils.set_incremental_state(
+#             self, incremental_state, 'prev_state', reordered_state,
+#         )
 
 
-# Registering allows the model to be used with exisiting
-# Command-line Tools
-
-# All registered models must implement the BaseFairseqModel interface.
-# For sequence-to-sequence models (i.e., any model with a single
-# Encoder and Decoder), we can instead implement the
-# FairseqEncoderDecoderModel interface.
-
-# Note: the register_model "decorator" should immediately precede the
-# definition of the Model class.
 @register_model('simple_lstm')
 class SimpleLSTMModel(FairseqEncoderDecoderModel):
-
-    # NO __INIT__ METHOD
 
     @staticmethod
     def add_args(parser):
@@ -362,8 +326,7 @@ class SimpleLSTMModel(FairseqEncoderDecoderModel):
         # Fairseq initializes models by calling the ``build_model()``
         # function. This provides more flexibility, since the returned model
         # instance can be of a different type than the one that was called.
-        # In this case we'll just return a SimpleLSTMModel
-        # instance.
+        # In this case we'll just return a SimpleLSTMModel instance.
 
         # Initialize our Encoder and Decoder.
         encoder = SimpleLSTMEncoder(
@@ -373,7 +336,6 @@ class SimpleLSTMModel(FairseqEncoderDecoderModel):
             hidden_dim=args.encoder_hidden_dim,
             dropout=args.encoder_dropout,
         )
-
         decoder = SimpleLSTMDecoder(
             dictionary=task.target_dictionary,
             encoder_hidden_dim=args.encoder_hidden_dim,
@@ -381,10 +343,11 @@ class SimpleLSTMModel(FairseqEncoderDecoderModel):
             hidden_dim=args.decoder_hidden_dim,
             dropout=args.decoder_dropout,
         )
-
         model = SimpleLSTMModel(encoder, decoder)
 
         # Print the model architecture.
+        print('MODEL:::')
+        print(type(model))
         print(model)
 
         return model
@@ -399,7 +362,6 @@ class SimpleLSTMModel(FairseqEncoderDecoderModel):
     #     decoder_out = self.decoder(prev_output_tokens, encoder_out)
     #     return decoder_out
 
-
 # define a named architecture with the configuration for our
 # model. This is done with the register_model_architecture()
 # function decorator.
@@ -411,6 +373,7 @@ class SimpleLSTMModel(FairseqEncoderDecoderModel):
 # of the model we registered above (i.e., 'simple_lstm'). The function we
 # register here should take a single argument *args* and modify it in-place
 # to match the desired architecture.
+
 
 @register_model_architecture('simple_lstm', 'tutorial_simple_lstm')
 def tutorial_simple_lstm(args):

@@ -9,7 +9,7 @@ Data pre-processing: build vocabularies and binarize training data.
 Changes:
  - Boolean variables added for the creation of A-component
    attribute dictionaries (e.g. review sentiment, category,
-   rating) 
+   rating)
 
 """
 
@@ -31,9 +31,14 @@ from fairseq.binarizer import Binarizer
 # USE_CATEGORY = 'cate'
 # USE_RATING = 'rate'
 
-USE_SENTIMENT = 'sentiment'
-USE_CATEGORY = 'domain'
-USE_RATING = 'rating'
+# USE_SENTIMENT = 'sentiment'
+# USE_CATEGORY = 'domain'
+# USE_RATING = 'rating'
+
+USE_SENTIMENT = False
+USE_CATEGORY = False
+USE_RATING = False
+USE_KNOWLEDGE = 'description'
 
 logging.basicConfig(
     format='%(asctime)s | %(levelname)s | %(name)s | %(message)s',
@@ -140,6 +145,10 @@ def main(args):
     if USE_RATING:
         rate_dict = task.build_normalisation_dictionary(
             filenames=[train_path(USE_RATING)], dict_path=dict_path(USE_RATING), rate=True)
+
+    if USE_KNOWLEDGE:
+        know_dict = task.build_normalisation_dictionary(
+            filenames=[train_path(USE_KNOWLEDGE)], dict_path=dict_path(USE_KNOWLEDGE), know=True)
 
     # if USE_SENTIMENT:
     #     senti_dict = task.build_normalisation_dictionary(
@@ -336,6 +345,9 @@ def main(args):
 
     if USE_RATING:
         make_all(USE_RATING, rate_dict)
+
+    if USE_KNOWLEDGE:
+        make_all(USE_KNOWLEDGE, know_dict)
 
     # if USE_SENTIMENT:
     #     make_all('senti', senti_dict)
