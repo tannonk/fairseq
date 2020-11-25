@@ -975,7 +975,9 @@ def Linear(in_features, out_features, bias=True, dropout=0.):
 
 # should I have def rrgen_lstm_knowldg(args)?
 
-@register_model_architecture('rrgen_lstm', 'rrgen_lstm_arch', 'rrgen_lstm_knowldg')
+
+# #I had to comment this out in order to run a different model (simple_lstm). I wonder why...
+# @register_model_architecture('rrgen_lstm', 'rrgen_lstm_arch')
 def rrgen_lstm_arch(args):
     args.rnn_type = getattr(args, 'rnn_type', 'LSTM')  # TODO extend for GRU
     args.dropout = getattr(args, 'dropout', 0.1)
