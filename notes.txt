@@ -1,48 +1,5 @@
-Tannon's:
-    categories.json
-    test.rating    test.response_rg     test.sentiment
-    train.rating   train.response_rg    train.sentiment
-    valid.rating   valid.response_rg    valid.sentiment
 
-    test.domain    test.response        test.review
-    train.domain   train.response       train.review
-    valid.domain   valid.response       valid.review
-
-
-fairseq-preprocess \
-        --source-lang review \
-        --target-lang response_rg \
-        --trainpref /srv/scratch2/kew/fairseq_materials/rrgen/en/data_raw/train \
-        --validpref /srv/scratch2/kew/fairseq_materials/rrgen/en/data_raw/valid \
-        --testpref /srv/scratch2/kew/fairseq_materials/rrgen/en/data_raw/test \
-        --dataset-impl mmap \
-        --task rrgen_translation \
-        --joined-dictionary \
-        --destdir /srv/scratch2/kew/fairseq_materials/rrgen/en/data_bin_rg
-
-
-# ##############################################################################
-
-I need ## --source-lang2 description \
---dataset-impl raw \
-
-
-MINE:
-
-        fairseq-preprocess \
-            --source-lang review \
-            --target-lang response \
-            --trainpref  /home/user/shaita/data/fairseq_test/train \
-            --validpref /home/user/shaita/data/fairseq_test/valid \
-            --testpref  /home/user/shaita/data/fairseq_test/test \
-            --dataset-impl raw \
-            --task rrgen_translation_knowldg \
-            --joined-dictionary \
-            --destdir /home/user/shaita/data/fairseq_test/data_raw_rg
-
-Wrote preprocessed data to /home/user/shaita/data/fairseq_test/data_bin_rg
-
-# ##############################################################################
+# ####################### PREPROCESSING ######################################
 
         fairseq-preprocess \
             --trainpref names/train \
@@ -67,10 +24,52 @@ Wrote preprocessed data to /home/user/shaita/data/fairseq_test/data_bin_rg
             --testpref $TEXT/test \
             --destdir data-bin/iwslt14.tokenized.de-en
 
+--------------------------------------------------------------------------------
+
+TANNON'S:
+    categories.json
+    test.rating    test.response_rg     test.sentiment
+    train.rating   train.response_rg    train.sentiment
+    valid.rating   valid.response_rg    valid.sentiment
+
+    test.domain    test.response        test.review
+    train.domain   train.response       train.review
+    valid.domain   valid.response       valid.review
+
+
+fairseq-preprocess \
+        --source-lang review \
+        --target-lang response_rg \
+        --trainpref /srv/scratch2/kew/fairseq_materials/rrgen/en/data_raw/train \
+        --validpref /srv/scratch2/kew/fairseq_materials/rrgen/en/data_raw/valid \
+        --testpref /srv/scratch2/kew/fairseq_materials/rrgen/en/data_raw/test \
+        --dataset-impl mmap \
+        --task rrgen_translation \
+        --joined-dictionary \
+        --destdir /srv/scratch2/kew/fairseq_materials/rrgen/en/data_bin_rg
 
 --------------------------------------------------------------------------------
 
-Tannon's:
+MINE:
+
+        fairseq-preprocess \
+            --source-lang review \
+            --target-lang response \
+            --trainpref  /home/user/shaita/data/fairseq_test/train \
+            --validpref /home/user/shaita/data/fairseq_test/valid \
+            --testpref  /home/user/shaita/data/fairseq_test/test \
+            --dataset-impl raw \
+            --task rrgen_translation_knowldg \
+            --joined-dictionary \
+            --destdir /home/user/shaita/data/fairseq_test/data_raw_rg
+
+Wrote preprocessed data to /home/user/shaita/data/fairseq_test/data_bin_rg
+
+
+# ######################### TRAINING ########################################
+
+TANNON'S:
+
 # NB. executed on s3it volta
 train_src_rg: ~/scratch/fairseq_materialss/rrgen/en/data_bin_rg
     fairseq-train ~/scratch/fairseq_materials/rrgen/en/data_bin_rg/ \
@@ -95,9 +94,28 @@ train_src_rg: ~/scratch/fairseq_materialss/rrgen/en/data_bin_rg
     --use-rating rating \
     --skip-invalid-size-inputs-valid-test
 
-# ##############################################################################
+--------------------------------------------------------------------------------
 
 MINE:
+
+### simple_lstm
+
+    CUDA_VISIBLE_DEVICES=1 fairseq-train /home/user/shaita/data/fairseq_test/data_bin_rg/ \
+    --arch tutorial_simple_lstm \
+    --encoder-dropout 0.2 \
+    --decoder-dropout 0.2 \
+    --skip-invalid-size-inputs-valid-test \
+    --save-dir /home/user/shaita/data/fairseq_test/model01_4000 \
+      --optimizer adam \
+      --lr 0.005 \
+      --lr-shrink 0.5 \
+      --max-tokens 4000 \
+      --max-source-positions 400 \
+      --max-target-positions 400 \
+      --max-epoch 10
+
+
+### rrgen_lstm
 
 train_src_rg: ~/scratch/fairseq_materialss/rrgen/en/data_bin_rg
     fairseq-train /home/user/shaita/data/fairseq_test/data_bin_rg/ \
@@ -121,7 +139,16 @@ train_src_rg: ~/scratch/fairseq_materialss/rrgen/en/data_bin_rg
     --skip-invalid-size-inputs-valid-test
 
 
-# ##############################################################################
+# ######################### DECODING #####################################
+
+fairseq-generate data-bin/iwslt14.tokenized.de-en \
+  --path checkpoints/checkpoint_best.pt \
+  --beam 5 \
+  --remove-bpe
+
+--------------------------------------------------------------------------------
+
+TANNON'S:
 
 decode_src_rg_greedy:
     CUDA_VISIBLE_DEVICES=6 nohup fairseq-generate \
@@ -144,6 +171,26 @@ decode_src_rg_greedy:
     --use-category domain \
     --use-rating rating > /srv/scratch2/kew/fairseq_materials/rrgen/en/ft100src_rg/nbest5.txt &
 
+--------------------------------------------------------------------------------
+
+MINE:
+
+    CUDA_VISIBLE_DEVICES=1 fairseq-generate \
+    /home/user/shaita/data/fairseq_test/data_bin_rg/ \
+    --path /home/user/shaita/data/fairseq_test/model01_4000/checkpoint_best.pt \
+    --skip-invalid-size-inputs-valid-test \
+    -s review \
+    -t response \
+    --max-source-positions 400 \
+    --max-target-positions 400 \
+    --beam 5
+
+
+
+# ######################## MISC ##########################################
+
+
+CUDA_VISIBLE_DEVICES=2 fairseq-train data-bin/iwslt14.tokenized.de-en   --arch tutorial_simple_lstm   --encoder-dropout 0.2 --decoder-dropout 0.2   --optimizer adam --lr 0.005 --lr-shrink 0.5   --max-tokens 12000
 
     cp zhao_cloned/dataset/ground_large_pp/test_source.txt data/fairseq_test/test.review
     cp zhao_cloned/dataset/ground_large_pp/test_target.txt data/fairseq_test/test.response
