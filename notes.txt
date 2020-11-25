@@ -1,3 +1,4 @@
+/home/user/shaita/data/fairseq_test/rr_bin_toyset: small dataset with no ground knowlwdge
 
 # ####################### PREPROCESSING ######################################
 
@@ -43,7 +44,7 @@ fairseq-preprocess \
         --trainpref /srv/scratch2/kew/fairseq_materials/rrgen/en/data_raw/train \
         --validpref /srv/scratch2/kew/fairseq_materials/rrgen/en/data_raw/valid \
         --testpref /srv/scratch2/kew/fairseq_materials/rrgen/en/data_raw/test \
-        --dataset-impl mmap \
+        --dataset-impl raw \
         --task rrgen_translation \
         --joined-dictionary \
         --destdir /srv/scratch2/kew/fairseq_materials/rrgen/en/data_bin_rg
@@ -52,18 +53,24 @@ fairseq-preprocess \
 
 MINE:
 
-        fairseq-preprocess \
-            --source-lang review \
-            --target-lang response \
-            --trainpref  /home/user/shaita/data/fairseq_test/train \
-            --validpref /home/user/shaita/data/fairseq_test/valid \
-            --testpref  /home/user/shaita/data/fairseq_test/test \
-            --dataset-impl raw \
-            --task rrgen_translation_knowldg \
-            --joined-dictionary \
-            --destdir /home/user/shaita/data/fairseq_test/data_raw_rg
+fairseq-preprocess \
+    --source-lang review \
+    --target-lang response \
+    --trainpref  /home/user/shaita/data/fairseq_test/TAGK_toyset/train \
+    --validpref /home/user/shaita/data/fairseq_test/TAGK_toyset/valid \
+    --testpref  /home/user/shaita/data/fairseq_test/TAGK_toyset/test \
+    --dataset-impl mmap \
+    --joined-dictionary \
+    --destdir /home/user/shaita/data/fairseq_test/rrd_bin_toyset \
+    --task rrgen_translation_knowldg
 
-Wrote preprocessed data to /home/user/shaita/data/fairseq_test/data_bin_rg
+Wrote preprocessed data to:
+    - /home/user/shaita/data/fairseq_test/rr_bin_full
+    - /home/user/shaita/data/fairseq_test/rr_raw_full
+    - /home/user/shaita/data/fairseq_test/rr_bin_toyset
+    - /home/user/shaita/data/fairseq_test/rr_raw_toyset
+    - /home/user/shaita/data/fairseq_test/rrd_raw_full
+    - /home/user/shaita/data/fairseq_test/rrd_raw_toyset
 
 
 # ######################### TRAINING ########################################
@@ -98,21 +105,34 @@ train_src_rg: ~/scratch/fairseq_materialss/rrgen/en/data_bin_rg
 
 MINE:
 
+available data:
+    - /home/user/shaita/data/fairseq_test/rr_bin_full
+    - /home/user/shaita/data/fairseq_test/rr_raw_full
+    - /home/user/shaita/data/fairseq_test/rr_bin_toyset
+    - /home/user/shaita/data/fairseq_test/rr_raw_toyset
+    - /home/user/shaita/data/fairseq_test/rrd_raw_full
+    - /home/user/shaita/data/fairseq_test/rrd_raw_toyset
+
 ### simple_lstm
 
-    CUDA_VISIBLE_DEVICES=1 fairseq-train /home/user/shaita/data/fairseq_test/data_bin_rg/ \
+    CUDA_VISIBLE_DEVICES=1 fairseq-train /home/user/shaita/data/fairseq_test/rr_bin_toyset/ \
     --arch tutorial_simple_lstm \
     --encoder-dropout 0.2 \
     --decoder-dropout 0.2 \
     --skip-invalid-size-inputs-valid-test \
-    --save-dir /home/user/shaita/data/fairseq_test/model01_4000 \
+    --save-dir /home/user/shaita/data/fairseq_test/checkpoints/model20_10000 \
+    -s review \
+    -t response \
       --optimizer adam \
       --lr 0.005 \
       --lr-shrink 0.5 \
-      --max-tokens 4000 \
+      --max-tokens 10000 \
       --max-source-positions 400 \
       --max-target-positions 400 \
-      --max-epoch 10
+      --max-epoch 20 \
+      --task rrgen_translation_knowldg
+
+    Produces exactly the same output for all samples: 	<GREETING> thank you for taking the time to review your recent stay with us . i am delighted to hear that you enjoyed your stay with us . we look forward to welcoming you back again soon . <SALUTATION>
 
 
 ### rrgen_lstm
@@ -134,7 +154,7 @@ train_src_rg: ~/scratch/fairseq_materialss/rrgen/en/data_bin_rg
     --decoder-out-embed-dim 100 \
     --encoder-hidden-size 200 \
     --decoder-hidden-size 200 \
-    --save-dir /home/user/shaita/data/fairseq_test/output \
+    --save-dir /home/user/shaita/data/fairseq_test/checkpoints/??? \
     --use-knowledge \
     --skip-invalid-size-inputs-valid-test
 
@@ -175,9 +195,11 @@ decode_src_rg_greedy:
 
 MINE:
 
+you can generate translations using fairseq-generate (for binarized data) or fairseq-interactive (for raw text).
+
     CUDA_VISIBLE_DEVICES=1 fairseq-generate \
-    /home/user/shaita/data/fairseq_test/data_bin_rg/ \
-    --path /home/user/shaita/data/fairseq_test/model01_4000/checkpoint_best.pt \
+    /home/user/shaita/data/fairseq_test/rr_bin_toyset/ \
+    --path /home/user/shaita/data/fairseq_test/checkpoints/model20_10000/checkpoint_best.pt \
     --skip-invalid-size-inputs-valid-test \
     -s review \
     -t response \
@@ -201,3 +223,6 @@ CUDA_VISIBLE_DEVICES=2 fairseq-train data-bin/iwslt14.tokenized.de-en   --arch t
     cp zhao_cloned/dataset/ground_large_pp/valid_source_2.txt data/fairseq_test/valid.description
     cp zhao_cloned/dataset/ground_large_pp/test_source_2.txt data/fairseq_test/test.description
     cp zhao_cloned/dataset/ground_large_pp/train_source_2.txt data/fairseq_test/train.description
+
+
+/home/user/shaita/data/fairseq_test/TAGK_dataset  TAGK_toyset

@@ -38,6 +38,8 @@ from fairseq.binarizer import Binarizer
 USE_SENTIMENT = False
 USE_CATEGORY = False
 USE_RATING = False
+# USE_KNOWLEDGE = False
+
 USE_KNOWLEDGE = 'description'
 
 logging.basicConfig(
@@ -202,6 +204,10 @@ def main(args):
 
         ds = indexed_dataset.make_builder(dataset_dest_file(args, output_prefix, lang, "bin"),
                                           impl=args.dataset_impl, vocab_size=len(vocab))
+
+        print(ds)
+        print(type(ds))
+
         merge_result(
             Binarizer.binarize(
                 input_file, vocab, lambda t: ds.add_item(t),
@@ -372,6 +378,7 @@ def main(args):
             with open(src_file_name, "r", encoding='utf-8') as src_file:
                 with open(tgt_file_name, "r", encoding='utf-8') as tgt_file:
                     for a, s, t in zip_longest(align_file, src_file, tgt_file):
+
                         si = src_dict.encode_line(s, add_if_not_exist=False)
                         ti = tgt_dict.encode_line(t, add_if_not_exist=False)
                         ai = list(

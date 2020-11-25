@@ -502,7 +502,7 @@ class RRGenTranslationTaskKnowldg(FairseqTask):
                         str_dtype = True
                         # print(type(line))
                         # print(line)
-                        tokens = [x.lower().strip() for x in line.split()]
+                        tokens = [str(x.lower().strip()) for x in line.split()]
                         for t in tokens:
                             data[t] += 1
         # for unknown values

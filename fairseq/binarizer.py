@@ -48,10 +48,12 @@ class Binarizer:
             f.seek(offset)
             # next(f) breaks f.tell(), hence readline() must be used
             line = safe_readline(f)
+
             while line:
                 if end > 0 and f.tell() > end:
                     break
                 if already_numberized:
+                    # print('BINARIZER LINE HERE already_numberized:', line)
                     id_strings = line.strip().split()
                     id_list = [int(id_string) for id_string in id_strings]
                     if reverse_order:
@@ -61,6 +63,7 @@ class Binarizer:
                     ids = torch.IntTensor(id_list)
                 else:
                     if hasattr(dict, 'encode_line'):
+                        # print('BINARIZER LINE HERE else but hasattr encode_line:', line)
                         ids = dict.encode_line(
                             line=line,
                             line_tokenizer=tokenize,
@@ -74,6 +77,7 @@ class Binarizer:
                     # category, rating, etc.) don't have
                     # attribute `encode_line`
                     else:
+                        print('ALL OTHER BINARIZER LINE HERE:', line)
                         # NOTE issue arrises when 'encoding'
                         # negative sentiment values with
                         # binarized  datasets. Hack: scale
