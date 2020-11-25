@@ -170,6 +170,9 @@ def _main(args, output_file):
         gen_timer.stop(num_generated_tokens)
 
         for i, sample_id in enumerate(sample['id'].tolist()):
+            print()
+            print('---------------------------------------------------')
+            print()
             has_target = sample['target'] is not None
 
             # Remove padding
@@ -227,20 +230,21 @@ def _main(args, output_file):
                 if not args.quiet:
                     score = hypo['score'] / math.log(2)  # convert to base 2
                     # original hypothesis (after tokenization and BPE)
-                    print('H-{}\t{}\t{}'.format(sample_id,
-                                                score, hypo_str), file=output_file)
+                    # print('H-{}\t{}\t{}'.format(sample_id,
+                    #                             score, hypo_str), file=output_file)
                     # detokenized hypothesis
+                    print()
                     print('D-{}\t{}\t{}'.format(sample_id, score,
                                                 detok_hypo_str), file=output_file)
-                    print('P-{}\t{}'.format(
-                        sample_id,
-                        ' '.join(map(
-                            lambda x: '{:.4f}'.format(x),
-                            # convert from base e to base 2
-                            hypo['positional_scores'].div_(
-                                math.log(2)).tolist(),
-                        ))
-                    ), file=output_file)
+                    # print('P-{}\t{}'.format(
+                    #     sample_id,
+                    #     ' '.join(map(
+                    #         lambda x: '{:.4f}'.format(x),
+                    #         # convert from base e to base 2
+                    #         hypo['positional_scores'].div_(
+                    #             math.log(2)).tolist(),
+                    #     ))
+                    # ), file=output_file)
 
                     if args.print_alignment:
                         print('A-{}\t{}'.format(
