@@ -755,7 +755,8 @@ class RRGenLSTMDecoder(FairseqIncrementalDecoder):
 
     def reorder_ext_attributes(self, ext_atts: Tensor, new_order: Tensor):
         """
-        Reorder an A-component attribute vector
+        Reorder an A-component attribute vector for decoding
+        with beam search
 
         ext_vector : e.g. ext_senti Tensor([batch_size]), etc.
         new_order : index Tensor indicating how to reorder
@@ -764,7 +765,13 @@ class RRGenLSTMDecoder(FairseqIncrementalDecoder):
         # import pdb
         # pdb.set_trace()
 
-        return ext_atts.view(1, -1).index_select(1, new_order).view(-1)
+        # for naive approach where ext are 1d tensors e.g.
+        # [1.0, 1.0, 0.0, 1.0]
+        # .view(-1) => flattens tensor e.g. [4, 25] => [100]
+        # return ext_atts.view(1, -1).index_select(1, new_order).view(-1)
+        
+        return ext_atts.index_select(0, new_order)
+
 
     def max_positions(self):
         """Maximum output length supported by the decoder."""
