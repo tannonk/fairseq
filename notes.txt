@@ -1,5 +1,3 @@
-/home/user/shaita/data/fairseq_test/rr_bin_toyset: small dataset with no ground knowlwdge
-
 # ####################### PREPROCESSING ######################################
 
         fairseq-preprocess \
@@ -105,22 +103,26 @@ train_src_rg: ~/scratch/fairseq_materialss/rrgen/en/data_bin_rg
 
 MINE:
 
-available data:
+available data binary:
     - /home/user/shaita/data/fairseq_test/rr_bin_full
-    - /home/user/shaita/data/fairseq_test/rr_raw_full
     - /home/user/shaita/data/fairseq_test/rr_bin_toyset
+
+available data raw no description:
+    - /home/user/shaita/data/fairseq_test/rr_raw_full
     - /home/user/shaita/data/fairseq_test/rr_raw_toyset
+
+available data raw with description:
     - /home/user/shaita/data/fairseq_test/rrd_raw_full
     - /home/user/shaita/data/fairseq_test/rrd_raw_toyset
 
 ### simple_lstm
 
-    CUDA_VISIBLE_DEVICES=1 fairseq-train /home/user/shaita/data/fairseq_test/rr_bin_toyset/ \
+    CUDA_VISIBLE_DEVICES=0 fairseq-train /home/user/shaita/data/fairseq_test/rrd_raw_toyset/ \
     --arch tutorial_simple_lstm \
     --encoder-dropout 0.2 \
     --decoder-dropout 0.2 \
     --skip-invalid-size-inputs-valid-test \
-    --save-dir /home/user/shaita/data/fairseq_test/checkpoints/model20_10000 \
+    --save-dir /home/user/shaita/data/fairseq_test/checkpoints/rrt_30_10000 \
     -s review \
     -t response \
       --optimizer adam \
@@ -129,7 +131,10 @@ available data:
       --max-tokens 10000 \
       --max-source-positions 400 \
       --max-target-positions 400 \
-      --max-epoch 20 \
+      --max-epoch 30 \
+      --dataset-impl raw \
+      --task=translation
+
       --task rrgen_translation_knowldg
 
     Produces exactly the same output for all samples: 	<GREETING> thank you for taking the time to review your recent stay with us . i am delighted to hear that you enjoyed your stay with us . we look forward to welcoming you back again soon . <SALUTATION>
@@ -197,15 +202,48 @@ MINE:
 
 you can generate translations using fairseq-generate (for binarized data) or fairseq-interactive (for raw text).
 
-    CUDA_VISIBLE_DEVICES=1 fairseq-generate \
-    /home/user/shaita/data/fairseq_test/rr_bin_toyset/ \
-    --path /home/user/shaita/data/fairseq_test/checkpoints/model20_10000/checkpoint_best.pt \
+    CUDA_VISIBLE_DEVICES=0 fairseq-generate \
+    /home/user/shaita/data/fairseq_test/rrd_raw_toyset/ \
+    --path /home/user/shaita/data/fairseq_test/checkpoints/rrt_30_10000/checkpoint_best.pt \
     --skip-invalid-size-inputs-valid-test \
     -s review \
     -t response \
     --max-source-positions 400 \
     --max-target-positions 400 \
     --beam 5
+    --dataset-impl raw
+
+<GREETING> thank you for taking the time to write a review on your recent stay with us . we are so pleased to hear that you enjoyed your stay with us . we look forward to welcoming you back again soon . <SALUTATION>
+
+1   thank you for taking the time to write a review on your recent stay with us
+13  thank you for taking the time to write a review
+112 thank you for taking the time
+37  the time to write
+17  write a review
+3   review on your recent stay
+4   on your recent stay with us
+55  your recent stay
+60 recent stay
+128 stay with
+216 with us
+125 stay with us
+
+1   we are so pleased to hear that you enjoyed your stay with us
+3   we are so pleased to hear
+11  that you enjoyed your stay with us
+
+3   we look forward to welcoming you back again soon
+109 we look forward
+5   welcoming you back again soon
+99  welcoming you
+85  to welcoming you
+16  back again soon
+37  back again
+56  again soon
+
+
+
+
 
 
 

@@ -7,7 +7,7 @@
 Train a new model on one or across multiple GPUs.
 """
 
-import argparse
+# import argparse
 import logging
 import math
 import random
@@ -41,6 +41,9 @@ logger = logging.getLogger("fairseq_cli.train")
 def main(args):
     utils.import_user_module(args)
 
+    for arg in vars(args):
+        print(arg, ':::', getattr(args, arg))
+
     assert (
         args.max_tokens is not None or args.max_sentences is not None
     ), "Must specify batch size either with --max-tokens or --max-sentences"
@@ -53,13 +56,21 @@ def main(args):
         checkpoint_utils.verify_checkpoint_directory(args.save_dir)
 
     # Print args
-    logger.info(args)
+    # print(type(logger.info(args)))
+
+    # for k, v in logger.info(args):
+    #     print(item)
+    #     print()
 
     # Setup task, e.g., translation, language modeling, etc.
     task = tasks.setup_task(args)
 
+    print("args.valid_subset")
+    print(args.valid_subset)
+
     # Load valid dataset (we load training data below, based on the latest checkpoint)
     for valid_sub_split in args.valid_subset.split(","):
+        print(valid_sub_split)
         task.load_dataset(valid_sub_split, combine=False, epoch=1)
 
     # Build model and criterion
@@ -210,6 +221,8 @@ def train(args, trainer, task, epoch_itr):
     trainer.begin_epoch(epoch_itr.epoch)
 
     valid_subsets = args.valid_subset.split(",")
+
+    print("line 218, valid_subsets::", valid_subsets)
     should_stop = False
     for i, samples in enumerate(progress):
         with metrics.aggregate("train_inner"), torch.autograd.profiler.record_function(

@@ -336,6 +336,15 @@ class SimpleLSTMModel(FairseqEncoderDecoderModel):
             hidden_dim=args.encoder_hidden_dim,
             dropout=args.encoder_dropout,
         )
+
+        encoder2 = SimpleLSTMEncoder(
+            args=args,
+            dictionary=task.source_dictionary,
+            embed_dim=args.encoder_embed_dim,
+            hidden_dim=args.encoder_hidden_dim,
+            dropout=args.encoder_dropout,
+        )
+
         decoder = SimpleLSTMDecoder(
             dictionary=task.target_dictionary,
             encoder_hidden_dim=args.encoder_hidden_dim,

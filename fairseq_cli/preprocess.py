@@ -205,8 +205,8 @@ def main(args):
         ds = indexed_dataset.make_builder(dataset_dest_file(args, output_prefix, lang, "bin"),
                                           impl=args.dataset_impl, vocab_size=len(vocab))
 
-        print(ds)
-        print(type(ds))
+        # print(ds)
+        # print(type(ds))
 
         merge_result(
             Binarizer.binarize(
