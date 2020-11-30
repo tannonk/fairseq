@@ -342,6 +342,15 @@ def add_preprocess_args(parser):
     group.add_argument("--workers", metavar="N", default=1, type=int,
                        help="number of parallel workers")
     # fmt: on
+
+    # modification for rrgen
+    group.add_argument("--sent-ext", metavar="SENTI", default=None, type=str,
+                       help="file extension for sentiment annotations")
+    group.add_argument("--cate-ext", metavar="CATE", default=None, type=str,
+                       help="file extension for category annotations")
+    group.add_argument("--rate-ext", metavar="RATE", default=None, type=str,
+                       help="file extension for review rating annotations")
+    
     return parser
 
 

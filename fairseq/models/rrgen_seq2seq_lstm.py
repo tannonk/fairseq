@@ -457,19 +457,23 @@ class RRGenLSTMDecoder(FairseqIncrementalDecoder):
         # of the hidden vector before it gets passed through
         # MLP
 
+        # import pdb;pdb.set_trace()
+
         self.tie_ext_feature_size = encoder_output_units
 
         if self.tie_ext_features:
             if self.use_senti:
-                # self.tie_ext_feature_size += 1
-                # for alpha_seystems sentiment, we expect
-                # the sentiment attribute to be a 25d vector
-                self.tie_ext_feature_size += 25
+                if self.use_senti == 'sentiment':
+                    self.tie_ext_feature_size += 1
+                elif self.use_senti == 'alpha_sentiment':
+                    # for alpha_seystems sentiment, we expect
+                    # the sentiment attribute to be a 25d vector
+                    self.tie_ext_feature_size += 25
             if self.use_rate:
                 self.tie_ext_feature_size += 1
             if self.use_cate:
                 self.tie_ext_feature_size += 1
-            if self.use_len:
+            if self.use_len: #TODO incorporate length attributes
                 self.tie_ext_feature_size += 1
 
         # from original -> handles projections from

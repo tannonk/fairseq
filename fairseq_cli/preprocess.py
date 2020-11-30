@@ -25,16 +25,6 @@ from fairseq import options, tasks, utils
 from fairseq.data import indexed_dataset
 from fairseq.binarizer import Binarizer
 
-# update to file indicator if not available/required,
-# otherwise set to False
-# USE_SENTIMENT = 'senti'
-# USE_CATEGORY = 'cate'
-# USE_RATING = 'rate'
-
-# USE_SENTIMENT = 'sentiment'
-USE_SENTIMENT = 'alpha_sentiment'
-USE_CATEGORY = 'domain'
-USE_RATING = 'rating'
 
 logging.basicConfig(
     format='%(asctime)s | %(levelname)s | %(name)s | %(message)s',
@@ -56,6 +46,9 @@ def main(args):
     logger.info(args)
 
     task = tasks.get_task(args.task)
+
+    print(args)
+    import pdb;pdb.set_trace()
 
     def train_path(lang):
         return "{}{}".format(args.trainpref, ("." + lang) if lang else "")
@@ -139,36 +132,36 @@ def main(args):
     # import pdb; pdb.set_trace()
 
     # expects file of np arrays of size (1, 25)
-    if USE_SENTIMENT == 'alpha_sentiment':
+    if args.sent_ext == 'alpha_sentiment':
         
         # cp test.alpha_sentiment to test.review-response_rg.alpha_sentiment
         shutil.copy(
-            train_path(USE_SENTIMENT),
-            f'{args.destdir}/train.{args.source_lang}-{args.target_lang}.{USE_SENTIMENT}'
+            train_path(args.sent_ext),
+            f'{args.destdir}/train.{args.source_lang}-{args.target_lang}.{args.sent_ext}'
             )
         shutil.copy(
-            test_path(USE_SENTIMENT),
-            f'{args.destdir}/test.{args.source_lang}-{args.target_lang}.{USE_SENTIMENT}'
+            test_path(args.sent_ext),
+            f'{args.destdir}/test.{args.source_lang}-{args.target_lang}.{args.sent_ext}'
             )
         shutil.copy(
-            valid_path(USE_SENTIMENT),
-            f'{args.destdir}/valid.{args.source_lang}-{args.target_lang}.{USE_SENTIMENT}'
+            valid_path(args.sent_ext),
+            f'{args.destdir}/valid.{args.source_lang}-{args.target_lang}.{args.sent_ext}'
             )
 
         senti_dict = None
 
     # assumed to be simple one int value per input text
-    elif USE_SENTIMENT == 'sentiment':
+    elif args.sent_ext == 'sentiment':
         senti_dict = task.build_normalisation_dictionary(
-            filenames=[train_path(USE_SENTIMENT)], dict_path=dict_path(USE_SENTIMENT), senti=True)
+            filenames=[train_path(args.sent_ext)], dict_path=dict_path(args.sent_ext), senti=True)
 
-    if USE_CATEGORY:
+    if args.cate_ext:
         cate_dict = task.build_normalisation_dictionary(
-            filenames=[train_path(USE_CATEGORY)], dict_path=dict_path(USE_CATEGORY), cate=True)
+            filenames=[train_path(args.cate_ext)], dict_path=dict_path(args.cate_ext), cate=True)
 
-    if USE_RATING:
+    if args.rate_ext:
         rate_dict = task.build_normalisation_dictionary(
-            filenames=[train_path(USE_RATING)], dict_path=dict_path(USE_RATING), rate=True)
+            filenames=[train_path(args.rate_ext)], dict_path=dict_path(args.rate_ext), rate=True)
 
 
     src_dict.save(dict_path(args.source_lang))
@@ -346,14 +339,14 @@ def main(args):
     if target:
         make_all(args.target_lang, tgt_dict)
 
-    if USE_SENTIMENT:
-        make_all(USE_SENTIMENT, senti_dict)
+    if args.sent_ext:
+        make_all(args.sent_ext, senti_dict)
 
-    if USE_CATEGORY:
-        make_all(USE_CATEGORY, cate_dict)
+    if args.cate_ext:
+        make_all(args.cate_ext, cate_dict)
 
-    if USE_RATING:
-        make_all(USE_RATING, rate_dict)
+    if args.rate_ext:
+        make_all(args.rate_ext, rate_dict)
 
 
     if args.align_suffix:
