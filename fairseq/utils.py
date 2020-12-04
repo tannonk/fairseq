@@ -183,7 +183,8 @@ def replace_unk(hypo_str, src_str, alignment, align_dict, unk):
 def post_process_prediction(
     hypo_tokens, src_str, alignment, align_dict, tgt_dict, remove_bpe=None, extra_symbols_to_ignore=None
 ):
-    hypo_str = tgt_dict.string(hypo_tokens, remove_bpe, extra_symbols_to_ignore=extra_symbols_to_ignore)
+    hypo_str = tgt_dict.string(hypo_tokens, remove_bpe,
+                               extra_symbols_to_ignore=extra_symbols_to_ignore)
     if align_dict is not None:
         hypo_str = replace_unk(
             hypo_str, src_str, alignment, align_dict, tgt_dict.unk_string()
@@ -464,6 +465,15 @@ def eval(model):
     model.eval()
     yield
     model.train(is_training)
+
+
+def eval_bool(x, default=False):
+    if x is None:
+        return default
+    try:
+        return bool(eval(x))
+    except TypeError:
+        return default
 
 
 def has_parameters(module):

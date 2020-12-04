@@ -51,7 +51,8 @@ def collate(
         index 3 is repeated twice)
         """
         align_tgt = alignments[:, 1]
-        _, align_tgt_i, align_tgt_c = torch.unique(align_tgt, return_inverse=True, return_counts=True)
+        _, align_tgt_i, align_tgt_c = torch.unique(
+            align_tgt, return_inverse=True, return_counts=True)
         align_weights = align_tgt_c[align_tgt_i[np.arange(len(align_tgt))]]
         return 1. / align_weights.float()
 
@@ -191,7 +192,8 @@ class LanguagePairDataset(FairseqDataset):
             assert src_dict.eos() == tgt_dict.eos()
             assert src_dict.unk() == tgt_dict.unk()
         if tgt is not None:
-            assert len(src) == len(tgt), "Source and target must contain the same number of examples"
+            assert len(src) == len(
+                tgt), "Source and target must contain the same number of examples"
         self.src = src
         self.tgt = tgt
         self.src_sizes = np.array(src_sizes)
@@ -236,6 +238,7 @@ class LanguagePairDataset(FairseqDataset):
             # determine bucket sizes using self.num_tokens, which will return
             # the padded lengths (thanks to BucketPadLengthDataset)
             num_tokens = np.vectorize(self.num_tokens, otypes=[np.long])
+            print("About to call num_tokens")
             self.bucketed_num_tokens = num_tokens(np.arange(len(self.src)))
             self.buckets = [
                 (None, num_tokens)
@@ -321,6 +324,7 @@ class LanguagePairDataset(FairseqDataset):
                 - `tgt_lang_id` (LongTensor): a long Tensor which contains target language
                    IDs of each sample in the batch
         """
+        # print("samples", len(samples))
         res = collate(
             samples,
             pad_idx=self.src_dict.pad(),
@@ -335,17 +339,19 @@ class LanguagePairDataset(FairseqDataset):
             bsz = src_tokens.size(0)
             if self.src_lang_id is not None:
                 res['net_input']['src_lang_id'] = torch.LongTensor(
-                            [[self.src_lang_id]]
-                            ).expand(bsz, 1).to(src_tokens)
+                    [[self.src_lang_id]]
+                ).expand(bsz, 1).to(src_tokens)
             if self.tgt_lang_id is not None:
                 res['tgt_lang_id'] = torch.LongTensor(
-                            [[self.tgt_lang_id]]
-                            ).expand(bsz, 1).to(src_tokens)
+                    [[self.tgt_lang_id]]
+                ).expand(bsz, 1).to(src_tokens)
         return res
 
     def num_tokens(self, index):
         """Return the number of tokens in a sample. This value is used to
         enforce ``--max-tokens`` during batching."""
+        # print("num_tokens in a sample", max(self.src_sizes[index], self.tgt_sizes[index]
+        # if self.tgt_sizes is not None else 0))
         return max(self.src_sizes[index], self.tgt_sizes[index] if self.tgt_sizes is not None else 0)
 
     def size(self, index):

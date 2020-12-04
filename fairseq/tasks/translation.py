@@ -46,6 +46,7 @@ def load_langpair_dataset(
 
     def split_exists(split, src, tgt, lang, data_path):
         filename = os.path.join(data_path, '{}.{}-{}.{}'.format(split, src, tgt, lang))
+        print("filename", filename)
         return indexed_dataset.dataset_exists(filename, impl=dataset_impl)
 
     src_datasets = []
@@ -65,7 +66,18 @@ def load_langpair_dataset(
             else:
                 raise FileNotFoundError('Dataset not found: {} ({})'.format(split, data_path))
 
-        src_dataset = data_utils.load_indexed_dataset(prefix + src, src_dict, dataset_impl)
+        src_dataset = data_utils.load_indexed_dataset(
+            prefix + src, src_dict, dataset_impl)
+        # print("prefix", prefix)
+        # print("src", src)
+        # print("dictionary size", len(src_dict))
+        # for k in vars(src_dict):
+        #     print(k, ':::', getattr(src_dict, k))
+        # dictionary looks like this
+        # unk_word:<unk>, pad_word:<pad>, eos_word:</s>, symbols:['<s>,'<pad>,all tokens,...],
+        # count:[1,1,all token counts,...], indicies:{'<s>': 0, '<pad>': 1, dictionary of all tokens and their indicies},
+        # bos_index:0, pad_index:1, eos_index:2, unk_index:3, nspecial:4
+        # print("src_dataset", src_dataset)
         if truncate_source:
             src_dataset = AppendTokenDataset(
                 TruncateDataset(
@@ -77,6 +89,7 @@ def load_langpair_dataset(
         src_datasets.append(src_dataset)
 
         tgt_dataset = data_utils.load_indexed_dataset(prefix + tgt, tgt_dict, dataset_impl)
+        # print("dictionary size", len(tgt_dict))
         if tgt_dataset is not None:
             tgt_datasets.append(tgt_dataset)
 
@@ -85,14 +98,17 @@ def load_langpair_dataset(
         ))
 
         if not combine:
+            # print("it is NOT COMBINE")
             break
 
     assert len(src_datasets) == len(tgt_datasets) or len(tgt_datasets) == 0
 
     if len(src_datasets) == 1:
+        # print("len(source_datasets) is 1")
         src_dataset = src_datasets[0]
         tgt_dataset = tgt_datasets[0] if len(tgt_datasets) > 0 else None
     else:
+        # print("len(source_datasets) are not 1")
         sample_ratios = [1] * len(src_datasets)
         sample_ratios[0] = upsample_primary
         src_dataset = ConcatDataset(src_datasets, sample_ratios)
@@ -121,6 +137,8 @@ def load_langpair_dataset(
             align_dataset = data_utils.load_indexed_dataset(align_path, None, dataset_impl)
 
     tgt_dataset_sizes = tgt_dataset.sizes if tgt_dataset is not None else None
+
+    # print('ABOUT TO RETURN LanguagePairDataset')
     return LanguagePairDataset(
         src_dataset, src_dataset.sizes, src_dict,
         tgt_dataset, tgt_dataset_sizes, tgt_dict,
@@ -130,6 +148,15 @@ def load_langpair_dataset(
         num_buckets=num_buckets,
         shuffle=shuffle,
     )
+    # return MonolingualDataset(
+    #     src_dataset, src_dataset.sizes, src_dict,
+    #     tgt_dataset, tgt_dataset_sizes, tgt_dict,
+    #     left_pad_source=left_pad_source,
+    #     left_pad_target=left_pad_target,
+    #     align_dataset=align_dataset, eos=eos,
+    #     num_buckets=num_buckets,
+    #     shuffle=shuffle,
+    # )
 
 
 @register_task('translation')
@@ -247,6 +274,8 @@ class TranslationTask(FairseqTask):
             split (str): name of the split (e.g., train, valid, test)
         """
         paths = utils.split_paths(self.args.data)
+        # print("translation, load_dataset, paths", paths)
+        # ['/home/user/shaita/data/fairseq_test/rrd_raw_toyset/']
         assert len(paths) > 0
         data_path = paths[(epoch - 1) % len(paths)]
 

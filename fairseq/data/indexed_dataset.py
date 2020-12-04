@@ -243,6 +243,7 @@ class IndexedRawTextDataset(FairseqDataset):
     def read_data(self, path, dictionary):
         with open(path, 'r', encoding='utf-8') as f:
             for line in f:
+                # print(line)
                 self.lines.append(line.strip('\n'))
                 tokens = dictionary.encode_line(
                     line, add_if_not_exist=False,
@@ -415,7 +416,8 @@ class MMapIndexedDataset(torch.utils.data.Dataset):
 
             self._bin_buffer_mmap = np.memmap(path, mode='r', order='C')
             self._bin_buffer = memoryview(self._bin_buffer_mmap)
-            self._sizes = np.frombuffer(self._bin_buffer, dtype=np.int32, count=self._len, offset=offset)
+            self._sizes = np.frombuffer(self._bin_buffer, dtype=np.int32,
+                                        count=self._len, offset=offset)
             self._pointers = np.frombuffer(self._bin_buffer, dtype=np.int64, count=self._len,
                                            offset=offset + self._sizes.nbytes)
 

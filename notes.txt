@@ -117,25 +117,25 @@ available data raw with description:
 
 ### simple_lstm
 
-    CUDA_VISIBLE_DEVICES=0 fairseq-train /home/user/shaita/data/fairseq_test/rrd_raw_toyset/ \
+    CUDA_VISIBLE_DEVICES=2 fairseq-train /home/user/shaita/data/fairseq_test/rrd_raw_full/ \
     --arch tutorial_simple_lstm \
     --encoder-dropout 0.2 \
     --decoder-dropout 0.2 \
     --skip-invalid-size-inputs-valid-test \
-    --save-dir /home/user/shaita/data/fairseq_test/checkpoints/rrt_30_10000 \
+    --save-dir /home/user/shaita/data/fairseq_test/checkpoints/rrd_10_10000_full \
     -s review \
     -t response \
-      --optimizer adam \
-      --lr 0.005 \
-      --lr-shrink 0.5 \
-      --max-tokens 10000 \
-      --max-source-positions 400 \
-      --max-target-positions 400 \
-      --max-epoch 30 \
-      --dataset-impl raw \
-      --task=translation
+    --optimizer adam \
+    --lr 0.005 \
+    --lr-shrink 0.5 \
+    --max-tokens 10000 \
+    --max-source-positions 400 \
+    --max-target-positions 400 \
+    --dataset-impl raw \
+    --task=translation \
+    --max-epoch 10
 
-      --task rrgen_translation_knowldg
+    --task rrgen_translation_knowldg
 
     Produces exactly the same output for all samples: 	<GREETING> thank you for taking the time to review your recent stay with us . i am delighted to hear that you enjoyed your stay with us . we look forward to welcoming you back again soon . <SALUTATION>
 
@@ -203,14 +203,14 @@ MINE:
 you can generate translations using fairseq-generate (for binarized data) or fairseq-interactive (for raw text).
 
     CUDA_VISIBLE_DEVICES=0 fairseq-generate \
-    /home/user/shaita/data/fairseq_test/rrd_raw_toyset/ \
-    --path /home/user/shaita/data/fairseq_test/checkpoints/rrt_30_10000/checkpoint_best.pt \
+    /home/user/shaita/data/fairseq_test/rrd_raw_full/ \
+    --path /home/user/shaita/data/fairseq_test/checkpoints/rrd_10_10000_full/checkpoint_best.pt \
     --skip-invalid-size-inputs-valid-test \
     -s review \
     -t response \
     --max-source-positions 400 \
     --max-target-positions 400 \
-    --beam 5
+    --beam 5 \
     --dataset-impl raw
 
 <GREETING> thank you for taking the time to write a review on your recent stay with us . we are so pleased to hear that you enjoyed your stay with us . we look forward to welcoming you back again soon . <SALUTATION>
@@ -240,6 +240,12 @@ you can generate translations using fairseq-generate (for binarized data) or fai
 16  back again soon
 37  back again
 56  again soon
+
+
+ADDED ATTENTION: more variation
+<GREETING> thank you for taking the time to write a review of your recent stay with us . we look forward to welcoming you back again soon . <SALUTATION>
+
+<GREETING> thank you for taking the time to write a review . we look forward to welcoming you back in the future . <SALUTATION>
 
 
 

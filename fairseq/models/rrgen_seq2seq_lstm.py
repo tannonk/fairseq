@@ -6,7 +6,7 @@
 Adaption of RRGen model using Fairseq out-of-the-box LSTM Encoder-Doceder
 
 Date: 18 Aug 2020
-Author: Tannon Kew 
+Author: Tannon Kew
 Email: kew@cl.uzh.ch
 
 """
@@ -47,6 +47,7 @@ class LSTMModel(FairseqEncoderDecoderModel):
         # fmt: off
         parser.add_argument('--dropout', type=float, metavar='D',
                             help='dropout probability')
+        # encoder
         parser.add_argument('--encoder-embed-dim', type=int, metavar='N',
                             help='encoder embedding dimension')
         parser.add_argument('--encoder-embed-path', type=str, metavar='STR',
@@ -59,6 +60,7 @@ class LSTMModel(FairseqEncoderDecoderModel):
                             help='number of encoder layers')
         parser.add_argument('--encoder-bidirectional', action='store_true',
                             help='make all layers of encoder bidirectional')
+        # decoder
         parser.add_argument('--decoder-embed-dim', type=int, metavar='N',
                             help='decoder embedding dimension')
         parser.add_argument('--decoder-embed-path', type=str, metavar='STR',
@@ -73,6 +75,7 @@ class LSTMModel(FairseqEncoderDecoderModel):
                             help='decoder output embedding dimension')
         parser.add_argument('--decoder-attention', type=str, metavar='BOOL',
                             help='decoder attention')
+        # other
         parser.add_argument('--adaptive-softmax-cutoff', metavar='EXPR',
                             help='comma separated list of adaptive softmax cutoff points. '
                                  'Must be used with adaptive_loss criterion')

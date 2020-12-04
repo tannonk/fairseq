@@ -76,6 +76,7 @@ def load_indexed_dataset(path, dictionary, dataset_impl=None, combine=False, def
 
         dataset_impl_k = dataset_impl
         if dataset_impl_k is None:
+            print("dataset_impl_k is None")
             dataset_impl_k = indexed_dataset.infer_dataset_impl(path_k)
 
         dataset = indexed_dataset.make_dataset(
@@ -84,15 +85,19 @@ def load_indexed_dataset(path, dictionary, dataset_impl=None, combine=False, def
             fix_lua_indexing=True,
             dictionary=dictionary,
         )
+        # print(dataset)
         if dataset is None:
             break
         logger.info('loaded {} examples from: {}'.format(len(dataset), path_k))
         datasets.append(dataset)
         if not combine:
             break
+        else:
+            print("IT IS COMBINE IN DATA_UTILS")
     if len(datasets) == 0:
         return None
     elif len(datasets) == 1:
+        # this is what I have now because I didn't parallelize the data
         return datasets[0]
     else:
         return ConcatDataset(datasets)
@@ -163,7 +168,9 @@ def _filter_by_size_dynamic(indices, size_fn, max_positions, raise_exception=Fal
         return a <= b if not isinstance(a, tuple) else max(a) <= b
 
     def check_size(idx):
+        # print("CHECKING SIZE")
         if isinstance(max_positions, float) or isinstance(max_positions, int):
+            print("FILTERING BY SIZE")
             return size_fn(idx) <= max_positions
         elif isinstance(max_positions, dict):
             idx_size = size_fn(idx)
@@ -218,6 +225,7 @@ def filter_by_size(indices, dataset, max_positions, raise_exception=False):
             indices, ignored = _filter_by_size_dynamic(
                 indices, dataset.size, max_positions)
     else:
+        # I am here
         indices, ignored = _filter_by_size_dynamic(
             indices, dataset.size, max_positions)
 

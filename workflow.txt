@@ -1,3 +1,10 @@
+
+Discovered this today
+# --model-parallel-size: total number of GPUs to parallelize model over
+# ModuleNotFoundError: No module named 'fairseq.model_parallel.megatron.mpu'
+
+----------------------
+
 Should I work with a Monolingual Dictionary and merge all three inputs?
 
 model: simple_lstm

@@ -26,7 +26,7 @@ from fairseq import (
 from fairseq.data import iterators
 from fairseq.logging import meters, metrics, progress_bar
 from fairseq.model_parallel.megatron_trainer import MegatronTrainer
-from fairseq.trainer import Trainer
+from fairseq.trainer import Trainer  # Main class for data parallel training.
 
 
 logging.basicConfig(
@@ -41,8 +41,8 @@ logger = logging.getLogger("fairseq_cli.train")
 def main(args):
     utils.import_user_module(args)
 
-    for arg in vars(args):
-        print(arg, ':::', getattr(args, arg))
+    # for arg in vars(args):
+    #     print(arg, ':::', getattr(args, arg))
 
     assert (
         args.max_tokens is not None or args.max_sentences is not None
@@ -55,32 +55,39 @@ def main(args):
     if distributed_utils.is_master(args):
         checkpoint_utils.verify_checkpoint_directory(args.save_dir)
 
-    # Print args
-    # print(type(logger.info(args)))
-
-    # for k, v in logger.info(args):
-    #     print(item)
-    #     print()
-
     # Setup task, e.g., translation, language modeling, etc.
+    # Parameters: cfg parsed command-line arguments
+    # return cls(cfg, **kwargs)
+    # it just passes the args
     task = tasks.setup_task(args)
 
-    print("args.valid_subset")
-    print(args.valid_subset)
+    # print("args.valid_subset")
+    # print(args.valid_subset)
+
+    # print("task")
+    # print(vars(task))
 
     # Load valid dataset (we load training data below, based on the latest checkpoint)
     for valid_sub_split in args.valid_subset.split(","):
-        print(valid_sub_split)
+        # print('valid_sub_split')
+        # print(valid_sub_split)
         task.load_dataset(valid_sub_split, combine=False, epoch=1)
 
     # Build model and criterion
     model = task.build_model(args)
+    # print('INITIALIZED MODEL')
+
+    # Criterions compute the loss function given the model and batch.
+    # loss = criterion(model, batch)
+
     criterion = task.build_criterion(args)
+    # print(criterion)
     logger.info(model)
     logger.info(
         "model {}, criterion {}".format(
             args.arch, criterion.__class__.__name__)
     )
+
     logger.info(
         "num. model params: {} (num. trained: {})".format(
             sum(p.numel() for p in model.parameters()),
@@ -99,6 +106,8 @@ def main(args):
         quantizer = None
 
     # Build trainer
+    # --model-parallel-size: total number of GPUs to parallelize model over
+    # ModuleNotFoundError: No module named 'fairseq.model_parallel.megatron.mpu'
     if args.model_parallel_size == 1:
         trainer = Trainer(args, task, model, criterion, quantizer)
     else:
@@ -132,10 +141,13 @@ def main(args):
         # train for one epoch
         valid_losses, should_stop = train(args, trainer, task, epoch_itr)
         if should_stop:
+            print('should_stop', should_stop)
             break
 
         # only use first validation loss to update the learning rate
         lr = trainer.lr_step(epoch_itr.epoch, valid_losses[0])
+
+        # print("task", task)
 
         epoch_itr = trainer.get_train_iterator(
             epoch_itr.next_epoch_idx,
@@ -222,7 +234,7 @@ def train(args, trainer, task, epoch_itr):
 
     valid_subsets = args.valid_subset.split(",")
 
-    print("line 218, valid_subsets::", valid_subsets)
+    # print("line 218, valid_subsets::", valid_subsets)
     should_stop = False
     for i, samples in enumerate(progress):
         with metrics.aggregate("train_inner"), torch.autograd.profiler.record_function(

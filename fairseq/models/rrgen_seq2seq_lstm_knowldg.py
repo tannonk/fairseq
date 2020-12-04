@@ -38,8 +38,8 @@ import numpy as np
 # from sklearn.preprocessing import MinMaxScaler
 
 
-DEFAULT_MAX_SOURCE_POSITIONS = 1e5
-DEFAULT_MAX_TARGET_POSITIONS = 1e5
+# DEFAULT_MAX_SOURCE_POSITIONS = 1e5
+# DEFAULT_MAX_TARGET_POSITIONS = 1e5
 
 
 @register_model('rrgen_lstm_knowldg')
@@ -113,10 +113,10 @@ class LSTMModelKnowldg(FairseqEncoderDecoderModel):
         if args.encoder_layers != args.decoder_layers:
             raise ValueError('--encoder-layers must match --decoder-layers')
 
-        max_source_positions = getattr(
-            args, 'max_source_positions', DEFAULT_MAX_SOURCE_POSITIONS)
-        max_target_positions = getattr(
-            args, 'max_target_positions', DEFAULT_MAX_TARGET_POSITIONS)
+        # max_source_positions = getattr(
+        #     args, 'max_source_positions', DEFAULT_MAX_SOURCE_POSITIONS)
+        # max_target_positions = getattr(
+        #     args, 'max_target_positions', DEFAULT_MAX_TARGET_POSITIONS)
 
         def load_pretrained_embedding_from_file(embed_path, dictionary, embed_dim):
             num_embeddings = len(dictionary)
@@ -184,23 +184,8 @@ class LSTMModelKnowldg(FairseqEncoderDecoderModel):
             dropout_out=args.encoder_dropout_out,
             bidirectional=args.encoder_bidirectional,
             pretrained_embed=pretrained_encoder_embed,
-            max_source_positions=max_source_positions,
+            max_source_positions=args.max_source_positions,
         )
-
-        # #Somewhere here somethijng needs tp happen
-
-        # encoder2 = RRGenLSTMEncoder2(
-        #     dictionary=task.source_dictionary,
-        #     # rnn_type=args.rnn_type,
-        #     embed_dim=args.encoder_embed_dim,
-        #     hidden_size=args.encoder_hidden_size,
-        #     num_layers=args.encoder_layers,
-        #     dropout_in=args.encoder_dropout_in,
-        #     dropout_out=args.encoder_dropout_out,
-        #     bidirectional=args.encoder_bidirectional,
-        #     pretrained_embed=pretrained_encoder_embed,
-        #     max_source_positions=max_source_positions,
-        # )
 
         decoder = RRGenLSTMDecoder(
             dictionary=task.target_dictionary,
@@ -211,6 +196,8 @@ class LSTMModelKnowldg(FairseqEncoderDecoderModel):
             num_layers=args.decoder_layers,
             dropout_in=args.decoder_dropout_in,
             dropout_out=args.decoder_dropout_out,
+
+            # is this the attention stuff?
             attention=options.eval_bool(args.decoder_attention),
             encoder_output_units=encoder.output_units,
 
@@ -222,7 +209,7 @@ class LSTMModelKnowldg(FairseqEncoderDecoderModel):
                 options.eval_str_list(args.adaptive_softmax_cutoff, type=int)
                 if args.criterion == 'adaptive_loss' else None
             ),
-            max_target_positions=max_target_positions,
+            max_target_positions=task.max_target_positions,
             residuals=False,
             use_senti=args.use_sentiment,
             use_cate=args.use_category,
@@ -270,7 +257,7 @@ class RRGenLSTMEncoder(FairseqEncoder):
         self, dictionary, rnn_type='LSTM', embed_dim=512, hidden_size=512, num_layers=1,
         dropout_in=0.1, dropout_out=0.1, bidirectional=False,
         left_pad=True, pretrained_embed=None, padding_idx=None,
-        max_source_positions=DEFAULT_MAX_SOURCE_POSITIONS,
+        max_source_positions=500,
     ):
         super().__init__(dictionary)
         self.num_layers = num_layers
@@ -278,6 +265,7 @@ class RRGenLSTMEncoder(FairseqEncoder):
             dropout_in, module_name=self.__class__.__name__)
         self.dropout_out_module = FairseqDropout(
             dropout_out, module_name=self.__class__.__name__)
+
         self.bidirectional = bidirectional
         self.hidden_size = hidden_size
         self.max_source_positions = max_source_positions
@@ -397,120 +385,37 @@ class RRGenLSTMEncoder(FairseqEncoder):
         """Maximum input length supported by the encoder."""
         return self.max_source_positions
 
+    # the attention computation happens at every decoder time step. It consists of the following stages:
+    # The current target hidden state is compared with all source states to derive attention weights
 
-class RRGenLSTMEncoder2(RRGenLSTMEncoder):
-    """LSTM encoder.
-    Can I just inherit from RRGenLSTMEncoder and delete all of this stuff?
-    Let's say that's ok and the entire __init__ method is inherited
-    """
-
-    def forward(
-        self,
-        src_tokens: Tensor,
-        src_lengths: Tensor,
-        enforce_sorted: bool = True,
-
-    ):
-        """
-        Args:
-            src_tokens (LongTensor): tokens in the source language of
-                shape `(batch, src_len)`
-            src_lengths (LongTensor): lengths of each source sentence of
-                shape `(batch)`
-            enforce_sorted (bool, optional): if True, `src_tokens` is
-                expected to contain sequences sorted by length in a
-                decreasing order. If False, this condition is not
-                required. Default: True.
-
-            NOTE
-            ext_senti, ext_cate and ext_rate are passed to encoder for simplicity but they are not used in the encoder
-        """
-        if self.left_pad:
-            # nn.utils.rnn.pack_padded_sequence requires right-padding;
-            # convert left-padding to right-padding
-            src_tokens = utils.convert_padding_direction(
-                src_tokens,
-                torch.zeros_like(src_tokens).fill_(self.padding_idx),
-                left_to_right=True,
-            )
-
-        bsz, seqlen = src_tokens.size()
-
-        # embed tokens
-        x = self.embed_tokens(src_tokens)
-        x = self.dropout_in_module(x)
-
-        # B x T x C -> T x B x C
-        x = x.transpose(0, 1)
-
-        # pack embedded source tokens into a PackedSequence
-        packed_x = nn.utils.rnn.pack_padded_sequence(
-            x, src_lengths.data, enforce_sorted=enforce_sorted
-        )
-
-        # apply LSTM
-        if self.bidirectional:
-            state_size = 2 * self.num_layers, bsz, self.hidden_size
-        else:
-            state_size = self.num_layers, bsz, self.hidden_size
-        h0 = x.new_zeros(*state_size)
-        c0 = x.new_zeros(*state_size)
-        packed_outs, (final_hiddens, final_cells) = self.lstm(
-            packed_x, (h0, c0))
-
-        # unpack outputs and apply dropout
-        x, _ = nn.utils.rnn.pad_packed_sequence(
-            packed_outs, padding_value=self.padding_idx*1.0)
-        x = self.dropout_out_module(x)
-        assert list(x.size()) == [seqlen, bsz, self.output_units]
-
-        if self.bidirectional:
-            final_hiddens = self.combine_bidir(final_hiddens, bsz)
-            final_cells = self.combine_bidir(final_cells, bsz)
-
-        encoder_padding_mask = src_tokens.eq(self.padding_idx).t()
-
-        return tuple((
-            x,  # seq_len x batch x hidden
-            final_hiddens,  # num_layers x batch x num_directions*hidden
-            final_cells,  # num_layers x batch x num_directions*hidden
-            encoder_padding_mask,  # seq_len x batch
-        ))
-
-    def combine_bidir(self, outs, bsz: int):
-        out = outs.view(self.num_layers, 2, bsz, -
-                        1).transpose(1, 2).contiguous()
-        return out.view(self.num_layers, bsz, -1)
-
-    def reorder_encoder_out(self, encoder_out, new_order):
-        return tuple((
-            encoder_out[0].index_select(1, new_order),
-            encoder_out[1].index_select(1, new_order),
-            encoder_out[2].index_select(1, new_order),
-            encoder_out[3].index_select(1, new_order),
-        ))
-
-    def max_positions(self):
-        """Maximum input length supported by the encoder."""
-        return self.max_source_positions
+    # From Zhao's paper
+    # attn1 = self.Wh(self._encoder_states) + tf.expand_dims(tf.matmul(outputs, self.Ws), 1) + \
+        # tf.einsum("ijn,nk->ijk", tf.expand_dims(attention_history, 2), self.wc)
 
 
 class AttentionLayer(nn.Module):
     def __init__(self, input_embed_dim, source_embed_dim, output_embed_dim, bias=False):
         super().__init__()
 
+        # nn.Linear applies a linear transformation to the incoming data: y = xA^T + b
+
         self.input_proj = Linear(input_embed_dim, source_embed_dim, bias=bias)
+
+        # I assume this is the current target hidden state
         self.output_proj = Linear(
             input_embed_dim + source_embed_dim, output_embed_dim, bias=bias)
 
     def forward(self, input, source_hids, encoder_padding_mask):
         # input: bsz x input_embed_dim
+
+        # are these source states?
         # source_hids: srclen x bsz x source_embed_dim
 
         # x: bsz x source_embed_dim
         x = self.input_proj(input)
 
         # compute attention
+        # are these attention weights?
         attn_scores = (source_hids * x.unsqueeze(0)).sum(dim=2)
 
         # don't attend over padding
@@ -520,10 +425,19 @@ class AttentionLayer(nn.Module):
                 float('-inf')
             ).type_as(attn_scores)  # FP16 support: cast to float and back
 
+        # torch.nn.functional.softmax(input, dim=None, _stacklevel=3, dtype=None)
+        # softmax(Xi) = exp(Xi)/SUMj(exp(Xj))
+        # It is applied to all slices along dim, and will re-scale them so that the elements lie in the range [0, 1] and sum to 1.
+
+        # The current target hidden state is compared with all source states to derive attention weights.
         attn_scores = F.softmax(attn_scores, dim=0)  # srclen x bsz
 
         # sum weighted sources
+
+        # Based on the attention weights we compute a context vector as the weighted average of the source states.
         x = (attn_scores.unsqueeze(2) * source_hids).sum(dim=0)
+
+        # Combine the context vector with the current target hidden state to yield the final attention vector
 
         x = torch.tanh(self.output_proj(torch.cat((x, input), dim=1)))
         return x, attn_scores
@@ -537,7 +451,7 @@ class RRGenLSTMDecoder(FairseqIncrementalDecoder):
         num_layers=1, dropout_in=0.1, dropout_out=0.1, attention=True,
         encoder_output_units=512, pretrained_embed=None,
         share_input_output_embed=False, adaptive_softmax_cutoff=None,
-        max_target_positions=DEFAULT_MAX_TARGET_POSITIONS,
+        max_target_positions=500,
         residuals=False,
         use_senti: bool = False,
         use_cate: bool = False,
@@ -553,6 +467,7 @@ class RRGenLSTMDecoder(FairseqIncrementalDecoder):
             dropout_in, module_name=self.__class__.__name__)
         self.dropout_out_module = FairseqDropout(
             dropout_out, module_name=self.__class__.__name__)
+
         self.hidden_size = hidden_size
         self.share_input_output_embed = share_input_output_embed
         self.need_attn = True
