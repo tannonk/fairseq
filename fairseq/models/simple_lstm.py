@@ -101,7 +101,6 @@ class SimpleLSTMModel(FairseqEncoderDecoderModel):
             dropout_out=args.decoder_dropout_out,
             max_target_positions=max_target_positions,
             attention=utils.eval_bool(args.decoder_attention),
-            # add attention
         )
         model = SimpleLSTMModel(encoder, decoder)
 
@@ -153,9 +152,12 @@ class SimpleLSTMEncoder(FairseqEncoder):
         #     print(arg, ':::', getattr(self.args, arg))
 
         # Our encoder will embed the inputs before feeding them to the LSTM.
+        # nn.Embedding is a simple lookup table that stores embeddings of a fixed dictionary and size.
+        # Input: (*), LongTensor of arbitrary shape containing the indices to extract
+        # Output: (*, H), where * is the input shape and H=embedding_dim
         self.embed_tokens = nn.Embedding(
-            num_embeddings=len(dictionary),
-            embedding_dim=embed_dim,
+            num_embeddings=len(dictionary),  # size of source vocab
+            embedding_dim=embed_dim,  # embedding size
             padding_idx=self.padding_idx,
         )
         # self.dropout = nn.Dropout(p=dropout)
@@ -178,15 +180,10 @@ class SimpleLSTMEncoder(FairseqEncoder):
 
     def forward(self, src_tokens, src_lengths, enforce_sorted=True):
         # The inputs to the ``forward()`` function are determined by the
-        # Task, and in particular the ``'net_input'`` key in each
-        # mini-batch. We discuss Tasks in the next tutorial, but for now just
-        # know that *src_tokens* has shape `(batch, src_len)` and *src_lengths*
-        # has shape `(batch)`.
+        # Task, and in particular the ``'net_input'`` key in each mini-batch.
+        # *src_tokens* has shape `(batch, src_len)`
+        # *src_lengths* has shape `(batch)`.
 
-        # Note that the source is typically padded on the left. This can be
-        # configured by adding the `--left-pad-source "False"` command-line
-        # argument, but here we'll make the Encoder handle either kind of
-        # padding by converting everything to be right-padded.
         if self.args.left_pad_source:
             # Convert left-padding to right-padding.
             src_tokens = utils.convert_padding_direction(
@@ -198,18 +195,34 @@ class SimpleLSTMEncoder(FairseqEncoder):
         bsz, seqlen = src_tokens.size()
 
         # Embed the source.
+        # self.embed_tokens has shape Vocab size X embed_dim
+        # *src_tokens* has shape `(batch, src_len)`
+        # produces batches where each sample has a shape (src_len, embed_dim)
+        # x should have size (batch_size, src_len, embed_dim)
         x = self.embed_tokens(src_tokens)
 
         # Apply dropout.
         x = self.dropout_in_module(x)
 
+        # B x T x C -> T x B x C
+        # x = x.transpose(0, 1)
+        # T is the length of the longest sequence (equal to lengths[0])
+        # B is the batch size
+
         # Pack the sequence into a PackedSequence object to feed to the LSTM.
+        # batch_first (bool, optional) – if True, the input is expected in B x T x * format.
+        # * is any number of dimensions (including 0).
         x = nn.utils.rnn.pack_padded_sequence(
-            x, src_lengths, batch_first=True, enforce_sorted=enforce_sorted)
+            x, src_lengths.data, batch_first=True, enforce_sorted=enforce_sorted)
+
+        state_size = self.num_layers, bsz, self.hidden_size
+        h0 = x.new_zeros(*state_size)
+        c0 = x.new_zeros(*state_size)
 
         # Get the output from the LSTM.
-        _outputs, (final_hidden, _final_cell) = self.lstm(x)
+        _outputs, (final_hidden, _final_cell) = self.lstm(x, (h0, c0))
 
+        # unpack outputs and apply dropout
         x, _ = nn.utils.rnn.pad_packed_sequence(
             _outputs, padding_value=self.padding_idx * 1.0
         )
@@ -291,7 +304,7 @@ class AttentionLayer(nn.Module):
         # x: bsz x source_embed_dim
         x = self.input_proj(input)
 
-        # compute attention
+        # #1. compute attention weights ###################################
         # are these attention weights?
         attn_scores = (source_hids * x.unsqueeze(0)).sum(dim=2)
 
@@ -309,15 +322,21 @@ class AttentionLayer(nn.Module):
         # The current target hidden state is compared with all source states to derive attention weights.
         attn_scores = F.softmax(attn_scores, dim=0)  # srclen x bsz
 
-        # sum weighted sources
+        # ########################## ######################################
+        # #2.compute a context vector #####################################
 
-        # Based on the attention weights we compute a context vector as the weighted average of the source states.
-        x = (attn_scores.unsqueeze(2) * source_hids).sum(dim=0)
+        # Based on the attention weights we compute a context vector
+        # as the weighted average of the source states.
+        context_vector = (attn_scores.unsqueeze(2) * source_hids).sum(dim=0)
 
-        # Combine the context vector with the current target hidden state to yield the final attention vector
+        # ########################## ######################################
+        # #3.compute attention vector #####################################
 
-        x = torch.tanh(self.output_proj(torch.cat((x, input), dim=1)))
-        return x, attn_scores
+        # Combine the context vector with the current target hidden state
+        # to yield the final attention vector
+
+        attention_vector = torch.tanh(self.output_proj(torch.cat((context_vector, input), dim=1)))
+        return attention_vector, attn_scores
 
 
 class SimpleLSTMDecoder(FairseqDecoder):
@@ -353,6 +372,7 @@ class SimpleLSTMDecoder(FairseqDecoder):
             dropout_out, module_name=self.__class__.__name__
         )
         # Our decoder will embed the inputs before feeding them to the LSTM.
+        # the target sentence
         self.embed_tokens = nn.Embedding(
             num_embeddings, embed_dim, padding_idx)
 
@@ -393,6 +413,7 @@ class SimpleLSTMDecoder(FairseqDecoder):
 
         if attention:
             # TODO make bias configurable
+            #
             self.attention = AttentionLayer(
                 hidden_size, encoder_output_units, hidden_size, bias=False
             )
@@ -458,6 +479,7 @@ class SimpleLSTMDecoder(FairseqDecoder):
         x = self.dropout_in_module(x)
 
         # B x T x C -> T x B x C
+        # bsz, tgt_len, vec_size -> tgt_len, bsz, vec_size
         x = x.transpose(0, 1)
 
         # initialize previous states (or get from cache during incremental generation)
@@ -480,6 +502,7 @@ class SimpleLSTMDecoder(FairseqDecoder):
             prev_cells = [zero_state for i in range(self.num_layers)]
             input_feed = None
 
+        # attention
         assert (
             srclen > 0 or self.attention is None
         ), "attention is not supported if there are no encoder outputs"
@@ -513,6 +536,10 @@ class SimpleLSTMDecoder(FairseqDecoder):
             # apply attention using the last layer's hidden state
             if self.attention is not None:
                 assert attn_scores is not None
+                # hidden = Tensor(bsz, hidden_size)
+                # encoder_outs = Tensor(srclen, bsz, hidden_size)
+                # encoder_padding_mask = Tensor(srclen, bsz)
+                # out is attention_vector
                 out, attn_scores[:, j, :] = self.attention(
                     hidden, encoder_outs, encoder_padding_mask
                 )

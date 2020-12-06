@@ -119,8 +119,6 @@ available data raw with description:
 
     CUDA_VISIBLE_DEVICES=2 fairseq-train /home/user/shaita/data/fairseq_test/rrd_raw_full/ \
     --arch tutorial_simple_lstm \
-    --encoder-dropout 0.2 \
-    --decoder-dropout 0.2 \
     --skip-invalid-size-inputs-valid-test \
     --save-dir /home/user/shaita/data/fairseq_test/checkpoints/rrd_10_10000_full \
     -s review \
@@ -133,7 +131,7 @@ available data raw with description:
     --max-target-positions 400 \
     --dataset-impl raw \
     --task=translation \
-    --max-epoch 10
+    --max-epoch 12
 
     --task rrgen_translation_knowldg
 
