@@ -15,6 +15,7 @@ from torch import Tensor
 
 DEFAULT_MAX_SOURCE_POSITIONS = 500
 DEFAULT_MAX_TARGET_POSITIONS = 500
+DEFAULT_MAX_KNOW_POSITIONS = 500
 
 
 @register_model('simple_lstm')
@@ -82,6 +83,10 @@ class SimpleLSTMModel(FairseqEncoderDecoderModel):
             args, "max_target_positions", DEFAULT_MAX_TARGET_POSITIONS
         )
 
+        max_know_positions = getattr(
+            args, "max_know_positions", DEFAULT_MAX_KNOW_POSITIONS
+        )
+
         encoder = SimpleLSTMEncoder(
             args=args,
             dictionary=task.source_dictionary,
@@ -95,14 +100,13 @@ class SimpleLSTMModel(FairseqEncoderDecoderModel):
 
         encoder2 = SimpleLSTMEncoder(
             args=args,
-
             dictionary=task.source_dictionary,
             embed_dim=args.encoder_embed_dim,
             # hidden_dim=args.encoder_hidden_dim,
             hidden_size=args.encoder_hidden_size,
             dropout_in=args.encoder_dropout_in,
             dropout_out=args.encoder_dropout_out,
-            max_source_positions=max_source_positions,
+            # max_know_positions=max_know_positions,
         )
 
         decoder = SimpleLSTMDecoder(
