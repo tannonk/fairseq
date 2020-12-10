@@ -39,19 +39,21 @@ def load_langpair_dataset(
     know, know_dict,
     combine, dataset_impl, upsample_primary,
     left_pad_source, left_pad_target, max_source_positions,
-    max_target_positions, prepend_bos=False, load_alignments=False,
+    max_target_positions, max_know_positions, prepend_bos=False, load_alignments=False,
     truncate_source=False, append_source_id=False,
     num_buckets=0,
     shuffle=True,
 ):
 
     def split_exists(split, src, tgt, lang, data_path):
+        # split, src, tgt, lang = valid, review, response, review
         filename = os.path.join(data_path, '{}.{}-{}.{}'.format(split, src, tgt, lang))
         print("filename", filename)
         return indexed_dataset.dataset_exists(filename, impl=dataset_impl)
 
     src_datasets = []
     tgt_datasets = []
+    know_datasets = []
 
     for k in itertools.count():
         split_k = split + (str(k) if k > 0 else '')
@@ -67,6 +69,13 @@ def load_langpair_dataset(
             else:
                 raise FileNotFoundError('Dataset not found: {} ({})'.format(split, data_path))
 
+        # prefix: /home/user/shaita/data/fairseq_test/experiment/valid.review-response
+
+        if split_exists(split_k, know, tgt, know, data_path):
+            know_prefix = os.path.join(data_path, '{}.{}-{}.'.format(split_k, know, tgt))
+
+        print("know_prefix", know_prefix)
+
         src_dataset = data_utils.load_indexed_dataset(
             prefix + src, src_dict, dataset_impl)
 
@@ -81,24 +90,34 @@ def load_langpair_dataset(
         src_datasets.append(src_dataset)
 
         tgt_dataset = data_utils.load_indexed_dataset(prefix + tgt, tgt_dict, dataset_impl)
-        # print("dictionary size", len(tgt_dict))
+
         if tgt_dataset is not None:
             tgt_datasets.append(tgt_dataset)
 
+        know_dataset = data_utils.load_indexed_dataset(know_prefix + know, tgt_dict, dataset_impl)
+
+        if know_dataset is not None:
+            know_datasets.append(know_dataset)
+
         logger.info('{} {} {}-{} {} examples'.format(
             data_path, split_k, src, tgt, len(src_datasets[-1])
+        ))
+
+        logger.info('{} {} {}-{} {} examples'.format(
+            data_path, split_k, tgt, know, len(know_datasets[-1])
         ))
 
         if not combine:
             # print("it is NOT COMBINE")
             break
 
-    assert len(src_datasets) == len(tgt_datasets) or len(tgt_datasets) == 0
+    assert len(src_datasets) == len(tgt_datasets) == len(know_datasets) or len(tgt_datasets) == 0
 
     if len(src_datasets) == 1:
         # print("len(source_datasets) is 1")
         src_dataset = src_datasets[0]
         tgt_dataset = tgt_datasets[0] if len(tgt_datasets) > 0 else None
+        know_dataset = know_datasets[0] if len(know_datasets) > 0 else None
     else:
         # print("len(source_datasets) are not 1")
         sample_ratios = [1] * len(src_datasets)
@@ -110,6 +129,7 @@ def load_langpair_dataset(
             tgt_dataset = None
 
     if prepend_bos:
+        print("prepend_bos")
         assert hasattr(src_dict, "bos_index") and hasattr(tgt_dict, "bos_index")
         src_dataset = PrependTokenDataset(src_dataset, src_dict.bos())
         if tgt_dataset is not None:
@@ -117,6 +137,7 @@ def load_langpair_dataset(
 
     eos = None
     if append_source_id:
+        print('append_source_id')
         src_dataset = AppendTokenDataset(src_dataset, src_dict.index('[{}]'.format(src)))
         if tgt_dataset is not None:
             tgt_dataset = AppendTokenDataset(tgt_dataset, tgt_dict.index('[{}]'.format(tgt)))
@@ -124,10 +145,12 @@ def load_langpair_dataset(
 
     align_dataset = None
     if load_alignments:
+        print('load_alignments')
         align_path = os.path.join(data_path, '{}.align.{}-{}'.format(split, src, tgt))
         if indexed_dataset.dataset_exists(align_path, impl=dataset_impl):
             align_dataset = data_utils.load_indexed_dataset(align_path, None, dataset_impl)
 
+    print("know_dataset.sizes:", know_dataset.sizes)
     tgt_dataset_sizes = tgt_dataset.sizes if tgt_dataset is not None else None
 
     print('ABOUT TO RETURN LanguagePairDataset')
@@ -185,6 +208,8 @@ class TranslationTask(FairseqTask):
                             help='max number of tokens in the source sequence')
         parser.add_argument('--max-target-positions', default=1024, type=int, metavar='N',
                             help='max number of tokens in the target sequence')
+        parser.add_argument('--max-know-positions', default=1024, type=int, metavar='N',
+                            help='max number of tokens in the ground knowledge sequence')
         parser.add_argument('--upsample-primary', default=1, type=int,
                             help='amount to upsample primary dataset')
         parser.add_argument('--truncate-source', action='store_true', default=False,
@@ -287,6 +312,7 @@ class TranslationTask(FairseqTask):
             left_pad_target=self.args.left_pad_target,
             max_source_positions=self.args.max_source_positions,
             max_target_positions=self.args.max_target_positions,
+            max_know_positions=self.args.max_know_positions,
             load_alignments=self.args.load_alignments,
             truncate_source=self.args.truncate_source,
             num_buckets=self.args.num_batch_buckets,
@@ -368,7 +394,7 @@ class TranslationTask(FairseqTask):
 
     def max_positions(self):
         """Return the max sentence length allowed by the task."""
-        return (self.args.max_source_positions, self.args.max_target_positions)
+        return (self.args.max_source_positions, self.args.max_target_positions, self.args.max_know_positions)
 
     @property
     def source_dictionary(self):
