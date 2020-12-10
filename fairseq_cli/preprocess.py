@@ -64,6 +64,7 @@ def main(args):
     task = tasks.get_task(args.task)
 
     def train_path(lang):
+        print("{}{}".format(args.trainpref, ("." + lang) if lang else ""))
         return "{}{}".format(args.trainpref, ("." + lang) if lang else "")
 
     def file_name(prefix, lang):
@@ -80,8 +81,8 @@ def main(args):
 
     def build_dictionary(filenames, src=False, tgt=False):
 
-        # import pdb
-        # pdb.set_trace()
+        import pdb
+        pdb.set_trace()
 
         # bitwise XOR: results to true if one (and only one) of the operands (evaluates to) true.
         assert src ^ tgt

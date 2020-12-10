@@ -36,6 +36,7 @@ def load_langpair_dataset(
     data_path, split,
     src, src_dict,
     tgt, tgt_dict,
+    know, know_dict,
     combine, dataset_impl, upsample_primary,
     left_pad_source, left_pad_target, max_source_positions,
     max_target_positions, prepend_bos=False, load_alignments=False,
@@ -68,16 +69,7 @@ def load_langpair_dataset(
 
         src_dataset = data_utils.load_indexed_dataset(
             prefix + src, src_dict, dataset_impl)
-        # print("prefix", prefix)
-        # print("src", src)
-        # print("dictionary size", len(src_dict))
-        # for k in vars(src_dict):
-        #     print(k, ':::', getattr(src_dict, k))
-        # dictionary looks like this
-        # unk_word:<unk>, pad_word:<pad>, eos_word:</s>, symbols:['<s>,'<pad>,all tokens,...],
-        # count:[1,1,all token counts,...], indicies:{'<s>': 0, '<pad>': 1, dictionary of all tokens and their indicies},
-        # bos_index:0, pad_index:1, eos_index:2, unk_index:3, nspecial:4
-        # print("src_dataset", src_dataset)
+
         if truncate_source:
             src_dataset = AppendTokenDataset(
                 TruncateDataset(
@@ -138,7 +130,8 @@ def load_langpair_dataset(
 
     tgt_dataset_sizes = tgt_dataset.sizes if tgt_dataset is not None else None
 
-    # print('ABOUT TO RETURN LanguagePairDataset')
+    print('ABOUT TO RETURN LanguagePairDataset')
+    print(know, len(know_dict))
     return LanguagePairDataset(
         src_dataset, src_dataset.sizes, src_dict,
         tgt_dataset, tgt_dataset_sizes, tgt_dict,
@@ -148,15 +141,6 @@ def load_langpair_dataset(
         num_buckets=num_buckets,
         shuffle=shuffle,
     )
-    # return MonolingualDataset(
-    #     src_dataset, src_dataset.sizes, src_dict,
-    #     tgt_dataset, tgt_dataset_sizes, tgt_dict,
-    #     left_pad_source=left_pad_source,
-    #     left_pad_target=left_pad_target,
-    #     align_dataset=align_dataset, eos=eos,
-    #     num_buckets=num_buckets,
-    #     shuffle=shuffle,
-    # )
 
 
 @register_task('translation')
@@ -231,10 +215,11 @@ class TranslationTask(FairseqTask):
                             help='print sample generations during validation')
         # fmt: on
 
-    def __init__(self, args, src_dict, tgt_dict):
+    def __init__(self, args, src_dict, tgt_dict, know_dict):
         super().__init__(args)
         self.src_dict = src_dict
         self.tgt_dict = tgt_dict
+        self.know_dict = know_dict
 
     @classmethod
     def setup_task(cls, args, **kwargs):
@@ -265,7 +250,15 @@ class TranslationTask(FairseqTask):
         logger.info('[{}] dictionary: {} types'.format(args.source_lang, len(src_dict)))
         logger.info('[{}] dictionary: {} types'.format(args.target_lang, len(tgt_dict)))
 
-        return cls(args, src_dict, tgt_dict)
+        if args.knowledge is not None:
+            know_dict = cls.load_dictionary(os.path.join(
+                paths[0], 'dict.{}.txt'.format(args.knowledge)))
+            logger.info('[{}] dictionary: {} types'.format(args.knowledge, len(know_dict)))
+            assert know_dict.pad() == tgt_dict.pad()
+            assert know_dict.eos() == tgt_dict.eos()
+            assert know_dict.unk() == tgt_dict.unk()
+
+        return cls(args, src_dict, tgt_dict, know_dict)
 
     def load_dataset(self, split, epoch=1, combine=False, **kwargs):
         """Load a given dataset split.
@@ -274,16 +267,20 @@ class TranslationTask(FairseqTask):
             split (str): name of the split (e.g., train, valid, test)
         """
         paths = utils.split_paths(self.args.data)
-        # print("translation, load_dataset, paths", paths)
+        print("translation, load_dataset, paths", paths)
         # ['/home/user/shaita/data/fairseq_test/rrd_raw_toyset/']
         assert len(paths) > 0
         data_path = paths[(epoch - 1) % len(paths)]
 
         # infer langcode
         src, tgt = self.args.source_lang, self.args.target_lang
+        know = self.args.knowledge
+
+        print("langcodes", src, tgt, know)
 
         self.datasets[split] = load_langpair_dataset(
             data_path, split, src, self.src_dict, tgt, self.tgt_dict,
+            know, self.know_dict,
             combine=combine, dataset_impl=self.args.dataset_impl,
             upsample_primary=self.args.upsample_primary,
             left_pad_source=self.args.left_pad_source,

@@ -27,6 +27,10 @@ class SimpleLSTMModel(FairseqEncoderDecoderModel):
         # Models can override this method to add new command-line arguments.
         # Here we'll add some new command-line arguments to configure dropout
         # and the dimensionality of the embeddings and hidden states.
+        parser.add_argument('--knowledge', default=None,
+                            help='include ground knowledge')
+        # parser.add_argument('-t2', '--target2', default=None, metavar='SRC',
+        #                     help='responses aligned to ground knowledge')
         parser.add_argument('--dropout', type=float, metavar='D',
                             help='dropout probability')
         parser.add_argument(
@@ -89,6 +93,18 @@ class SimpleLSTMModel(FairseqEncoderDecoderModel):
             max_source_positions=max_source_positions,
         )
 
+        encoder2 = SimpleLSTMEncoder(
+            args=args,
+
+            dictionary=task.source_dictionary,
+            embed_dim=args.encoder_embed_dim,
+            # hidden_dim=args.encoder_hidden_dim,
+            hidden_size=args.encoder_hidden_size,
+            dropout_in=args.encoder_dropout_in,
+            dropout_out=args.encoder_dropout_out,
+            max_source_positions=max_source_positions,
+        )
+
         decoder = SimpleLSTMDecoder(
             dictionary=task.target_dictionary,
             # encoder_hidden_dim=args.encoder_hidden_dim,
@@ -102,6 +118,7 @@ class SimpleLSTMModel(FairseqEncoderDecoderModel):
             max_target_positions=max_target_positions,
             attention=utils.eval_bool(args.decoder_attention),
         )
+        # model = SimpleLSTMModel(encoder, encoder2, decoder)
         model = SimpleLSTMModel(encoder, decoder)
 
         # Print the model architecture.
@@ -110,6 +127,17 @@ class SimpleLSTMModel(FairseqEncoderDecoderModel):
 
         return model
 
+    def forward(
+        self,
+        src_tokens,
+        src_lengths,
+        prev_output_tokens,
+    ):
+        encoder_out = self.encoder(src_tokens, src_lengths=src_lengths)
+        # encoder2_out = self.encoder2(desc_tokens, src_lengths=desc_lengths)
+        decoder_out = self.decoder(prev_output_tokens, encoder_out=encoder_out)
+
+        return decoder_out
     # We could override the ``forward()`` if we wanted more control over how
     # the encoder and decoder interact, but it's not necessary for this
     # tutorial since we can inherit the default implementation provided by
@@ -215,12 +243,12 @@ class SimpleLSTMEncoder(FairseqEncoder):
         x = nn.utils.rnn.pack_padded_sequence(
             x, src_lengths.data, batch_first=True, enforce_sorted=enforce_sorted)
 
-        state_size = self.num_layers, bsz, self.hidden_size
-        h0 = x.new_zeros(*state_size)
-        c0 = x.new_zeros(*state_size)
+        # state_size = self.num_layers, bsz, self.hidden_size
+        # h0 = x.new_zeros(*state_size)
+        # c0 = x.new_zeros(*state_size)
 
         # Get the output from the LSTM.
-        _outputs, (final_hidden, _final_cell) = self.lstm(x, (h0, c0))
+        _outputs, (final_hidden, _final_cell) = self.lstm(x)
 
         # unpack outputs and apply dropout
         x, _ = nn.utils.rnn.pad_packed_sequence(
@@ -678,6 +706,7 @@ def tutorial_simple_lstm(args):
     )
     args.decoder_out_embed_dim = getattr(args, "decoder_out_embed_dim", 256)
     args.decoder_attention = getattr(args, "decoder_attention", "1")
+    args.knowledge = getattr(args, 'knowledge', None)
 
 
 # #############################################################################
