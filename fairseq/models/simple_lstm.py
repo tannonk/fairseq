@@ -20,8 +20,10 @@ DEFAULT_MAX_KNOW_POSITIONS = 500
 
 @register_model('simple_lstm')
 class SimpleLSTMModel(FairseqEncoderDecoderModel):
-    def __init__(self, encoder, decoder):
+    def __init__(self, encoder, encoder2, decoder):
         super().__init__(encoder, decoder)
+        self.encoder2 = encoder
+        assert isinstance(self.encoder2, FairseqEncoder)
 
     @staticmethod
     def add_args(parser):
@@ -98,15 +100,16 @@ class SimpleLSTMModel(FairseqEncoderDecoderModel):
             max_source_positions=max_source_positions,
         )
 
+        # def forward(self, src_tokens, src_lengths, enforce_sorted=True):
         encoder2 = SimpleLSTMEncoder(
             args=args,
-            dictionary=task.source_dictionary,
+            dictionary=task.source2_dictionary,
             embed_dim=args.encoder_embed_dim,
             # hidden_dim=args.encoder_hidden_dim,
             hidden_size=args.encoder_hidden_size,
             dropout_in=args.encoder_dropout_in,
             dropout_out=args.encoder_dropout_out,
-            # max_know_positions=max_know_positions,
+            max_know_positions=max_know_positions,
         )
 
         decoder = SimpleLSTMDecoder(
@@ -123,7 +126,7 @@ class SimpleLSTMModel(FairseqEncoderDecoderModel):
             attention=utils.eval_bool(args.decoder_attention),
         )
         # model = SimpleLSTMModel(encoder, encoder2, decoder)
-        model = SimpleLSTMModel(encoder, decoder)
+        model = SimpleLSTMModel(encoder, encoder2, decoder)
 
         # Print the model architecture.
         # print(type(model))
@@ -164,6 +167,7 @@ class SimpleLSTMEncoder(FairseqEncoder):
         dropout_in=0.1,
         dropout_out=0.1,
         max_source_positions=DEFAULT_MAX_SOURCE_POSITIONS,
+        max_know_positions=DEFAULT_MAX_KNOW_POSITIONS,
         padding_idx=None,
         num_layers=1
     ):
