@@ -18,7 +18,7 @@ from fairseq.data import (
     data_utils,
     encoders,
     indexed_dataset,
-    LanguagePairDataset,
+    LanguageTripleDataset,
     PrependTokenDataset,
     StripTokenDataset,
     TruncateDataset,
@@ -153,11 +153,14 @@ def load_langpair_dataset(
     print("know_dataset.sizes:", know_dataset.sizes)
     tgt_dataset_sizes = tgt_dataset.sizes if tgt_dataset is not None else None
 
+    know_dataset_sizes = know_dataset.sizes if know_dataset is not None else None
+
     print('ABOUT TO RETURN LanguagePairDataset')
-    print(know, len(know_dict))
-    return LanguagePairDataset(
+    print(know, len(know), len(know_dict))
+    return LanguageTripleDataset(
         src_dataset, src_dataset.sizes, src_dict,
         tgt_dataset, tgt_dataset_sizes, tgt_dict,
+        know_dataset, know_dataset_sizes, know_dict,
         left_pad_source=left_pad_source,
         left_pad_target=left_pad_target,
         align_dataset=align_dataset, eos=eos,
@@ -304,7 +307,9 @@ class TranslationTask(FairseqTask):
         print("langcodes", src, tgt, know)
 
         self.datasets[split] = load_langpair_dataset(
-            data_path, split, src, self.src_dict, tgt, self.tgt_dict,
+            data_path, split,
+            src, self.src_dict,
+            tgt, self.tgt_dict,
             know, self.know_dict,
             combine=combine, dataset_impl=self.args.dataset_impl,
             upsample_primary=self.args.upsample_primary,
@@ -320,7 +325,7 @@ class TranslationTask(FairseqTask):
         )
 
     def build_dataset_for_inference(self, src_tokens, src_lengths):
-        return LanguagePairDataset(src_tokens, src_lengths, self.source_dictionary)
+        return LanguageTripleDataset(src_tokens, src_lengths, self.source_dictionary)
 
     def build_model(self, args):
         model = super().build_model(args)
