@@ -205,6 +205,7 @@ class TranslationTask(FairseqTask):
                             help='source language')
         parser.add_argument('-t', '--target-lang', default=None, metavar='TARGET',
                             help='target language')
+        parser.add_argument("--knowledge", default=None)
         parser.add_argument('--load-alignments', action='store_true',
                             help='load the binarized alignments')
         parser.add_argument('--left-pad-source', default='True', type=str, metavar='BOOL',
@@ -331,7 +332,7 @@ class TranslationTask(FairseqTask):
             shuffle=(split != 'test'),
         )
 
-        print('HALLO self.datasets[split]', self.datasets[split])
+        # print('HALLO self.datasets[split]', self.datasets[split])
 
     def build_dataset_for_inference(self, src_tokens, src_lengths):
         # called in fairseq_cli/interactive.py
