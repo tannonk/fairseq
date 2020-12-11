@@ -48,7 +48,7 @@ def load_langpair_dataset(
     def split_exists(split, src, tgt, lang, data_path):
         # split, src, tgt, lang = valid, review, response, review
         filename = os.path.join(data_path, '{}.{}-{}.{}'.format(split, src, tgt, lang))
-        print("filename", filename)
+        # print("filename", filename)
         return indexed_dataset.dataset_exists(filename, impl=dataset_impl)
 
     src_datasets = []
@@ -56,9 +56,12 @@ def load_langpair_dataset(
     know_datasets = []
 
     for k in itertools.count():
+
         split_k = split + (str(k) if k > 0 else '')
 
         # infer langcode
+        if split_exists(split_k, know, tgt, know, data_path):
+            know_prefix = os.path.join(data_path, '{}.{}-{}.'.format(split_k, know, tgt))
         if split_exists(split_k, src, tgt, src, data_path):
             prefix = os.path.join(data_path, '{}.{}-{}.'.format(split_k, src, tgt))
         elif split_exists(split_k, tgt, src, src, data_path):
@@ -71,10 +74,7 @@ def load_langpair_dataset(
 
         # prefix: /home/user/shaita/data/fairseq_test/experiment/valid.review-response
 
-        if split_exists(split_k, know, tgt, know, data_path):
-            know_prefix = os.path.join(data_path, '{}.{}-{}.'.format(split_k, know, tgt))
-
-        print("know_prefix", know_prefix)
+        # print("know_prefix", know_prefix)
 
         src_dataset = data_utils.load_indexed_dataset(
             prefix + src, src_dict, dataset_impl)
@@ -94,22 +94,26 @@ def load_langpair_dataset(
         if tgt_dataset is not None:
             tgt_datasets.append(tgt_dataset)
 
-        know_dataset = data_utils.load_indexed_dataset(know_prefix + know, tgt_dict, dataset_impl)
-
-        if know_dataset is not None:
-            know_datasets.append(know_dataset)
-
         logger.info('{} {} {}-{} {} examples'.format(
             data_path, split_k, src, tgt, len(src_datasets[-1])
         ))
 
-        logger.info('{} {} {}-{} {} examples'.format(
-            data_path, split_k, tgt, know, len(know_datasets[-1])
-        ))
+        # ##################
+
+        know_dataset = data_utils.load_indexed_dataset(
+            know_prefix + know, know_dict, dataset_impl)
+
+        if know_dataset is not None:
+            know_datasets.append(know_dataset)
+
+        logger.info('{} {} {}-{} {} examples'.format(data_path,
+                                                     split_k, know, tgt, len(know_datasets[-1])))
 
         if not combine:
             # print("it is NOT COMBINE")
             break
+
+    print(len(src_datasets), len(tgt_datasets), len(know_datasets))
 
     assert len(src_datasets) == len(tgt_datasets) == len(know_datasets) or len(tgt_datasets) == 0
 
@@ -150,17 +154,17 @@ def load_langpair_dataset(
         if indexed_dataset.dataset_exists(align_path, impl=dataset_impl):
             align_dataset = data_utils.load_indexed_dataset(align_path, None, dataset_impl)
 
-    print("know_dataset.sizes:", know_dataset.sizes)
+    # print("know_dataset.sizes:", know_dataset.sizes)
     tgt_dataset_sizes = tgt_dataset.sizes if tgt_dataset is not None else None
 
-    know_dataset_sizes = know_dataset.sizes if know_dataset is not None else None
+    # know_dataset_sizes = know_dataset.sizes if know_dataset is not None else None
 
     print('ABOUT TO RETURN LanguagePairDataset')
     print(know, len(know), len(know_dict))
     return LanguageTripleDataset(
         src_dataset, src_dataset.sizes, src_dict,
         tgt_dataset, tgt_dataset_sizes, tgt_dict,
-        know_dataset, know_dataset_sizes, know_dict,
+        know_dataset, know_dataset.sizes, know_dict,
         left_pad_source=left_pad_source,
         left_pad_target=left_pad_target,
         align_dataset=align_dataset, eos=eos,
@@ -304,7 +308,10 @@ class TranslationTask(FairseqTask):
         src, tgt = self.args.source_lang, self.args.target_lang
         know = self.args.knowledge
 
-        print("langcodes", src, tgt, know)
+        # print("langcodes", src, tgt, know)
+
+        # for arg in vars(self.know_dict):
+        #     print(arg, ':::', getattr(self.know_dict, arg))
 
         self.datasets[split] = load_langpair_dataset(
             data_path, split,
@@ -323,6 +330,8 @@ class TranslationTask(FairseqTask):
             num_buckets=self.args.num_batch_buckets,
             shuffle=(split != 'test'),
         )
+
+        print('HALLO self.datasets[split]', self.datasets[split])
 
     def build_dataset_for_inference(self, src_tokens, src_lengths):
         # called in fairseq_cli/interactive.py
