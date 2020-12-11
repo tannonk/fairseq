@@ -325,6 +325,7 @@ class TranslationTask(FairseqTask):
         )
 
     def build_dataset_for_inference(self, src_tokens, src_lengths):
+        # called in fairseq_cli/interactive.py
         return LanguageTripleDataset(src_tokens, src_lengths, self.source_dictionary)
 
     def build_model(self, args):

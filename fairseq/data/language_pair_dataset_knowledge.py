@@ -198,7 +198,7 @@ class LanguageTripleDataset(FairseqDataset):
             assert know_dict.eos() == tgt_dict.eos()
             assert know_dict.unk() == tgt_dict.unk()
 
-        print(len(tgt), len(know))
+        print(len(src), len(tgt), len(know))
 
         if tgt is not None:
             assert len(src) == len(
@@ -210,11 +210,15 @@ class LanguageTripleDataset(FairseqDataset):
         self.src = src
         self.tgt = tgt
         self.know = know
+
         self.src_sizes = np.array(src_sizes)
         self.tgt_sizes = np.array(tgt_sizes) if tgt_sizes is not None else None
         self.know_sizes = np.array(tgt_sizes) if tgt_sizes is not None else None
+
         self.src_dict = src_dict
         self.tgt_dict = tgt_dict
+        self.know_dict = know_dict
+
         self.left_pad_source = left_pad_source
         self.left_pad_target = left_pad_target
         self.shuffle = shuffle
@@ -229,6 +233,7 @@ class LanguageTripleDataset(FairseqDataset):
         self.src_lang_id = src_lang_id
         self.tgt_lang_id = tgt_lang_id
         if num_buckets > 0:
+            print(num_buckets)
             from fairseq.data import BucketPadLengthDataset
             self.src = BucketPadLengthDataset(
                 self.src,
