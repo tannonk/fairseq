@@ -187,6 +187,7 @@ class LanguageTripleDataset(FairseqDataset):
         num_buckets=0,
         src_lang_id=None,
         tgt_lang_id=None,
+        know_lang_id=None,
     ):
         if tgt_dict is not None:
             assert src_dict.pad() == tgt_dict.pad()
@@ -213,7 +214,7 @@ class LanguageTripleDataset(FairseqDataset):
 
         self.src_sizes = np.array(src_sizes)
         self.tgt_sizes = np.array(tgt_sizes) if tgt_sizes is not None else None
-        self.know_sizes = np.array(tgt_sizes) if tgt_sizes is not None else None
+        self.know_sizes = np.array(know_sizes) if tgt_sizes is not None else None
 
         self.src_dict = src_dict
         self.tgt_dict = tgt_dict
@@ -232,8 +233,10 @@ class LanguageTripleDataset(FairseqDataset):
         self.eos = (eos if eos is not None else src_dict.eos())
         self.src_lang_id = src_lang_id
         self.tgt_lang_id = tgt_lang_id
+        print("know_lang_id", tgt_lang_id)
+        self.know_lang_id = know_lang_id
         if num_buckets > 0:
-            print(num_buckets)
+            print('num_buckets', num_buckets)
             from fairseq.data import BucketPadLengthDataset
             self.src = BucketPadLengthDataset(
                 self.src,
@@ -273,11 +276,15 @@ class LanguageTripleDataset(FairseqDataset):
     def __getitem__(self, index):
         tgt_item = self.tgt[index] if self.tgt is not None else None
         src_item = self.src[index]
+        know_item = self.know[index] if self.know is not None else None
+        # print("know_item", type(know_item), know_item.size())
+        # print("src_item", type(src_item), src_item.size())
         # Append EOS to end of tgt sentence if it does not have an EOS and remove
         # EOS from end of src sentence if it exists. This is useful when we use
         # use existing datasets for opposite directions i.e., when we want to
         # use tgt_dataset as src_dataset and vice versa
         if self.append_eos_to_target:
+            print("if self.append_eos_to_target:")
             eos = self.tgt_dict.eos() if self.tgt_dict else self.src_dict.eos()
             if self.tgt and self.tgt[index][-1] != eos:
                 tgt_item = torch.cat([self.tgt[index], torch.LongTensor([eos])])
@@ -300,6 +307,7 @@ class LanguageTripleDataset(FairseqDataset):
             'id': index,
             'source': src_item,
             'target': tgt_item,
+            'knowledge': know_item,
         }
         if self.align_dataset is not None:
             example['alignment'] = self.align_dataset[index]
@@ -355,7 +363,9 @@ class LanguageTripleDataset(FairseqDataset):
             pad_to_length=pad_to_length,
         )
         if self.src_lang_id is not None or self.tgt_lang_id is not None:
+            # unclear what this does at the moment
             src_tokens = res['net_input']['src_tokens']
+            # know_tokens = res['net_input']['know_tokens']
             bsz = src_tokens.size(0)
             if self.src_lang_id is not None:
                 res['net_input']['src_lang_id'] = torch.LongTensor(
@@ -365,19 +375,23 @@ class LanguageTripleDataset(FairseqDataset):
                 res['tgt_lang_id'] = torch.LongTensor(
                     [[self.tgt_lang_id]]
                 ).expand(bsz, 1).to(src_tokens)
+            # if self.know_lang_id is not None:
+            #     res['net_input']['know_lang_id'] = torch.LongTensor(
+            #         [[self.know_lang_id]]
+            #     ).expand(bsz, 1).to(src_tokens)
         return res
 
     def num_tokens(self, index):
         """Return the number of tokens in a sample. This value is used to
         enforce ``--max-tokens`` during batching."""
         # print("num_tokens in a sample", max(self.src_sizes[index], self.tgt_sizes[index]
-        # if self.tgt_sizes is not None else 0))
-        return max(self.src_sizes[index], self.tgt_sizes[index] if self.tgt_sizes is not None else 0)
+        #                                     if self.tgt_sizes is not None else 0))
+        return max(self.src_sizes[index], self.tgt_sizes[index] if self.tgt_sizes is not None else 0, self.know_sizes[index])
 
     def size(self, index):
         """Return an example's size as a float or tuple. This value is used when
         filtering a dataset with ``--max-positions``."""
-        return (self.src_sizes[index], self.tgt_sizes[index] if self.tgt_sizes is not None else 0)
+        return (self.src_sizes[index], self.tgt_sizes[index] if self.tgt_sizes is not None else 0, self.know_sizes[index])
 
     def ordered_indices(self):
         """Return an ordered list of indices. Batches will be constructed based
