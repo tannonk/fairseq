@@ -407,6 +407,11 @@ class TranslationTask(FairseqTask):
         return self.src_dict
 
     @property
+    def source2_dictionary(self):
+        """Return the source :class:`~fairseq.data.Dictionary`."""
+        return self.know_dict
+
+    @property
     def target_dictionary(self):
         """Return the target :class:`~fairseq.data.Dictionary`."""
         return self.tgt_dict
