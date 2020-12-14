@@ -65,9 +65,21 @@ def collate(
     src_lengths = torch.LongTensor([
         s['source'].ne(pad_idx).long().sum() for s in samples
     ])
+
+    src2_tokens = merge('knowledge', left_pad=left_pad_source,
+                        pad_to_length=pad_to_length['source'] if pad_to_length is not None else None)
+
+    src2_lengths = torch.LongTensor([
+        s['knowledge'].ne(pad_idx).long().sum() for s in samples
+    ])
+
     src_lengths, sort_order = src_lengths.sort(descending=True)
     id = id.index_select(0, sort_order)
     src_tokens = src_tokens.index_select(0, sort_order)
+
+    src2_lengths, sort_order2 = src2_lengths.sort(descending=True)
+    id = id.index_select(0, sort_order2)
+    src2_tokens = src2_tokens.index_select(0, sort_order2)
 
     prev_output_tokens = None
     target = None
@@ -76,6 +88,7 @@ def collate(
             'target', left_pad=left_pad_target,
             pad_to_length=pad_to_length['target'] if pad_to_length is not None else None,
         )
+        # Do I need to redefine this with src2 sort_order2?
         target = target.index_select(0, sort_order)
         tgt_lengths = torch.LongTensor([
             s['target'].ne(pad_idx).long().sum() for s in samples
@@ -104,6 +117,8 @@ def collate(
         'net_input': {
             'src_tokens': src_tokens,
             'src_lengths': src_lengths,
+            'src2_tokens': src2_tokens,
+            'src2_lengths': src2_lengths,
         },
         'target': target,
     }
@@ -226,6 +241,7 @@ class LanguageTripleDataset(FairseqDataset):
         self.input_feeding = input_feeding
         self.remove_eos_from_source = remove_eos_from_source
         self.append_eos_to_target = append_eos_to_target
+        # for me it's None
         self.align_dataset = align_dataset
         if self.align_dataset is not None:
             assert self.tgt_sizes is not None, "Both source and target needed when alignments are provided"
@@ -233,8 +249,10 @@ class LanguageTripleDataset(FairseqDataset):
         self.eos = (eos if eos is not None else src_dict.eos())
         self.src_lang_id = src_lang_id
         self.tgt_lang_id = tgt_lang_id
-        print("know_lang_id", tgt_lang_id)
+        print("tgt_lang_id", tgt_lang_id)
         self.know_lang_id = know_lang_id
+
+        # this is not relevant to me now
         if num_buckets > 0:
             print('num_buckets', num_buckets)
             from fairseq.data import BucketPadLengthDataset
@@ -277,8 +295,7 @@ class LanguageTripleDataset(FairseqDataset):
         tgt_item = self.tgt[index] if self.tgt is not None else None
         src_item = self.src[index]
         know_item = self.know[index] if self.know is not None else None
-        # print("know_item", type(know_item), know_item.size())
-        # print("src_item", type(src_item), src_item.size())
+
         # Append EOS to end of tgt sentence if it does not have an EOS and remove
         # EOS from end of src sentence if it exists. This is useful when we use
         # use existing datasets for opposite directions i.e., when we want to
@@ -375,10 +392,10 @@ class LanguageTripleDataset(FairseqDataset):
                 res['tgt_lang_id'] = torch.LongTensor(
                     [[self.tgt_lang_id]]
                 ).expand(bsz, 1).to(src_tokens)
-            # if self.know_lang_id is not None:
-            #     res['net_input']['know_lang_id'] = torch.LongTensor(
-            #         [[self.know_lang_id]]
-            #     ).expand(bsz, 1).to(src_tokens)
+            if self.know_lang_id is not None:
+                res['net_input']['know_lang_id'] = torch.LongTensor(
+                    [[self.know_lang_id]]
+                ).expand(bsz, 1).to(src_tokens)
         return res
 
     def num_tokens(self, index):
