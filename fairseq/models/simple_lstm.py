@@ -15,12 +15,11 @@ from torch import Tensor
 
 DEFAULT_MAX_SOURCE_POSITIONS = 500
 DEFAULT_MAX_TARGET_POSITIONS = 500
-DEFAULT_MAX_KNOW_POSITIONS = 500
 
 
 @register_model('simple_lstm')
 class SimpleLSTMModel(FairseqEncoderDecoderModel):
-    def __init__(self, encoder, encoder2, decoder):
+    def __init__(self, encoder, decoder):
         super().__init__(encoder, decoder)
         self.encoder2 = encoder
         assert isinstance(self.encoder2, FairseqEncoder)
@@ -30,8 +29,8 @@ class SimpleLSTMModel(FairseqEncoderDecoderModel):
         # Models can override this method to add new command-line arguments.
         # Here we'll add some new command-line arguments to configure dropout
         # and the dimensionality of the embeddings and hidden states.
-        parser.add_argument('--knowledge', default=None,
-                            help='include ground knowledge')
+        # parser.add_argument('--knowledge', default=None,
+                            # help='include ground knowledge')
         # parser.add_argument('-t2', '--target2', default=None, metavar='SRC',
         #                     help='responses aligned to ground knowledge')
         parser.add_argument('--dropout', type=float, metavar='D',
@@ -78,6 +77,8 @@ class SimpleLSTMModel(FairseqEncoderDecoderModel):
         # instance can be of a different type than the one that was called.
         # In this case we'll just return a SimpleLSTMModel instance.
 
+        # print(args)
+
         max_source_positions = getattr(
             args, "max_source_positions", DEFAULT_MAX_SOURCE_POSITIONS
         )
@@ -86,7 +87,7 @@ class SimpleLSTMModel(FairseqEncoderDecoderModel):
         )
 
         max_know_positions = getattr(
-            args, "max_know_positions", DEFAULT_MAX_KNOW_POSITIONS
+            args, "max_know_positions", DEFAULT_MAX_SOURCE_POSITIONS
         )
 
         encoder = SimpleLSTMEncoder(
@@ -103,9 +104,9 @@ class SimpleLSTMModel(FairseqEncoderDecoderModel):
         # def forward(self, src_tokens, src_lengths, enforce_sorted=True):
         encoder2 = SimpleLSTMEncoder(
             args=args,
+            # return self.know_dict in @property-source2_dictionary
             dictionary=task.source2_dictionary,
             embed_dim=args.encoder_embed_dim,
-            # hidden_dim=args.encoder_hidden_dim,
             hidden_size=args.encoder_hidden_size,
             dropout_in=args.encoder_dropout_in,
             dropout_out=args.encoder_dropout_out,
@@ -117,7 +118,6 @@ class SimpleLSTMModel(FairseqEncoderDecoderModel):
             # encoder_hidden_dim=args.encoder_hidden_dim,
             embed_dim=args.decoder_embed_dim,
             hidden_size=args.decoder_hidden_size,
-            # hidden_dim=args.decoder_hidden_dim,
             out_embed_dim=args.decoder_out_embed_dim,
             encoder_output_units=encoder.output_units,
             dropout_in=args.decoder_dropout_in,
@@ -125,8 +125,8 @@ class SimpleLSTMModel(FairseqEncoderDecoderModel):
             max_target_positions=max_target_positions,
             attention=utils.eval_bool(args.decoder_attention),
         )
-        # model = SimpleLSTMModel(encoder, encoder2, decoder)
-        model = SimpleLSTMModel(encoder, encoder2, decoder)
+        model = SimpleLSTMModel(encoder2, decoder)
+        # model = SimpleLSTMModel(encoder2, decoder)
 
         # Print the model architecture.
         # print(type(model))
@@ -138,11 +138,14 @@ class SimpleLSTMModel(FairseqEncoderDecoderModel):
         self,
         src_tokens,
         src_lengths,
+        src2_tokens,
+        src2_lengths,
         prev_output_tokens,
+        enforce_sorted=True,
     ):
-        encoder_out = self.encoder(src_tokens, src_lengths=src_lengths)
-        # encoder2_out = self.encoder2(desc_tokens, src_lengths=desc_lengths)
-        decoder_out = self.decoder(prev_output_tokens, encoder_out=encoder_out)
+        # encoder_out = self.encoder(src_tokens, src_lengths=src_lengths)
+        encoder2_out = self.encoder2(src2_tokens, src_lengths=src2_lengths)
+        decoder_out = self.decoder(prev_output_tokens, encoder_out=encoder2_out)
 
         return decoder_out
     # We could override the ``forward()`` if we wanted more control over how
@@ -167,7 +170,7 @@ class SimpleLSTMEncoder(FairseqEncoder):
         dropout_in=0.1,
         dropout_out=0.1,
         max_source_positions=DEFAULT_MAX_SOURCE_POSITIONS,
-        max_know_positions=DEFAULT_MAX_KNOW_POSITIONS,
+        max_know_positions=DEFAULT_MAX_SOURCE_POSITIONS,
         padding_idx=None,
         num_layers=1
     ):
@@ -214,11 +217,26 @@ class SimpleLSTMEncoder(FairseqEncoder):
             dropout=self.dropout_out_module.p if num_layers > 1 else 0.,
         )
 
+    # def forward_torchscript(self, net_input: Dict[str, Tensor]):
+    #     """A TorchScript-compatible version of forward.
+    #
+    #     Encoders which use additional arguments may want to override
+    #     this method for TorchScript compatibility.
+    #     """
+    #     if torch.jit.is_scripting():
+    #         return self.forward(
+    #             src_tokens=net_input["src_tokens"],
+    #             src_lengths=net_input["src_lengths"],
+    #             src2_tokens=net_input["src2_tokens"]
+    #         )
+    #     else:
+    #         return self.forward_non_torchscript(net_input)
+
     def forward(self, src_tokens, src_lengths, enforce_sorted=True):
         # The inputs to the ``forward()`` function are determined by the
         # Task, and in particular the ``'net_input'`` key in each mini-batch.
-        # *src_tokens* has shape `(batch, src_len)`
-        # *src_lengths* has shape `(batch)`.
+        # src_tokens (LongTensor): tokens in the source language of shape `(batch, src_len)`
+        # src_lengths (LongTensor): lengths of each source sentence of shape `(batch)`
 
         if self.args.left_pad_source:
             # Convert left-padding to right-padding.
@@ -714,7 +732,7 @@ def tutorial_simple_lstm(args):
     )
     args.decoder_out_embed_dim = getattr(args, "decoder_out_embed_dim", 256)
     args.decoder_attention = getattr(args, "decoder_attention", "1")
-    args.knowledge = getattr(args, 'knowledge', None)
+    # args.knowledge = getattr(args, 'knowledge', None)
 
 
 # #############################################################################
