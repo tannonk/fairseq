@@ -157,8 +157,6 @@ def load_langpair_dataset(
     # print("know_dataset.sizes:", know_dataset.sizes)
     tgt_dataset_sizes = tgt_dataset.sizes if tgt_dataset is not None else None
 
-    # know_dataset_sizes = know_dataset.sizes if know_dataset is not None else None
-
     print('ABOUT TO RETURN LanguagePairDataset')
     print(know, len(know), len(know_dict))
     return LanguageTripleDataset(
@@ -332,7 +330,14 @@ class TranslationTask(FairseqTask):
             shuffle=(split != 'test'),
         )
 
-        # print('HALLO self.datasets[split]', self.datasets[split])
+        # print('HALLO self.datasets[split]')
+        # for arg in vars(self.datasets[split]):
+        #     print(arg, ':::', getattr(self.datasets[split], arg))
+        # print('---------------------------------------------')
+        # print()
+        #
+        # for k in self.datasets[split]:
+        #     print(k)
 
     def build_dataset_for_inference(self, src_tokens, src_lengths):
         # called in fairseq_cli/interactive.py

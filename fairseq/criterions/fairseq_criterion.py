@@ -27,6 +27,8 @@ class FairseqCriterion(_Loss):
 
     @classmethod
     def build_criterion(cls, args, task):
+
+        print('IS THE PROBLEM HERE?')
         """Construct a criterion from command-line args."""
         # Criterions can override this, but for convenience we also try
         # to automatically map argparse.Namespace keys to corresponding

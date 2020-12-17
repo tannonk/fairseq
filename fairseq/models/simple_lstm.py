@@ -19,9 +19,10 @@ DEFAULT_MAX_TARGET_POSITIONS = 500
 
 @register_model('simple_lstm')
 class SimpleLSTMModel(FairseqEncoderDecoderModel):
-    def __init__(self, encoder, decoder):
+    def __init__(self, encoder, encoder2, decoder):
         super().__init__(encoder, decoder)
-        self.encoder2 = encoder
+        self.encoder = encoder
+        self.encoder2 = encoder2
         assert isinstance(self.encoder2, FairseqEncoder)
 
     @staticmethod
@@ -101,7 +102,6 @@ class SimpleLSTMModel(FairseqEncoderDecoderModel):
             max_source_positions=max_source_positions,
         )
 
-        # def forward(self, src_tokens, src_lengths, enforce_sorted=True):
         encoder2 = SimpleLSTMEncoder(
             args=args,
             # return self.know_dict in @property-source2_dictionary
@@ -115,7 +115,6 @@ class SimpleLSTMModel(FairseqEncoderDecoderModel):
 
         decoder = SimpleLSTMDecoder(
             dictionary=task.target_dictionary,
-            # encoder_hidden_dim=args.encoder_hidden_dim,
             embed_dim=args.decoder_embed_dim,
             hidden_size=args.decoder_hidden_size,
             out_embed_dim=args.decoder_out_embed_dim,
@@ -125,12 +124,8 @@ class SimpleLSTMModel(FairseqEncoderDecoderModel):
             max_target_positions=max_target_positions,
             attention=utils.eval_bool(args.decoder_attention),
         )
-        model = SimpleLSTMModel(encoder2, decoder)
         # model = SimpleLSTMModel(encoder2, decoder)
-
-        # Print the model architecture.
-        # print(type(model))
-        # print(model)
+        model = SimpleLSTMModel(encoder, encoder2, decoder)
 
         return model
 
@@ -141,22 +136,16 @@ class SimpleLSTMModel(FairseqEncoderDecoderModel):
         src2_tokens,
         src2_lengths,
         prev_output_tokens,
-        enforce_sorted=True,
+        enforce_sorted=False,
     ):
-        # encoder_out = self.encoder(src_tokens, src_lengths=src_lengths)
-        encoder2_out = self.encoder2(src2_tokens, src_lengths=src2_lengths)
-        decoder_out = self.decoder(prev_output_tokens, encoder_out=encoder2_out)
+        encoder_out = self.encoder(src_tokens, src_lengths=src_lengths,
+                                   enforce_sorted=enforce_sorted)
+        encoder2_out = self.encoder2(
+            src2_tokens, src_lengths=src2_lengths, enforce_sorted=enforce_sorted)
+        encoder_all_out = encoder_out + encoder2_out
+        decoder_out = self.decoder(prev_output_tokens, encoder_out=encoder_all_out)
 
         return decoder_out
-    # We could override the ``forward()`` if we wanted more control over how
-    # the encoder and decoder interact, but it's not necessary for this
-    # tutorial since we can inherit the default implementation provided by
-    # the FairseqEncoderDecoderModel base class, which looks like:
-    #
-    # def forward(self, src_tokens, src_lengths, prev_output_tokens):
-    #     encoder_out = self.encoder(src_tokens, src_lengths)
-    #     decoder_out = self.decoder(prev_output_tokens, encoder_out)
-    #     return decoder_out
 
 
 class SimpleLSTMEncoder(FairseqEncoder):
@@ -266,6 +255,7 @@ class SimpleLSTMEncoder(FairseqEncoder):
         # Pack the sequence into a PackedSequence object to feed to the LSTM.
         # batch_first (bool, optional) – if True, the input is expected in B x T x * format.
         # * is any number of dimensions (including 0).
+
         x = nn.utils.rnn.pack_padded_sequence(
             x, src_lengths.data, batch_first=True, enforce_sorted=enforce_sorted)
 

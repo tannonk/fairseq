@@ -28,10 +28,11 @@ available data raw with description:
 
 ### simple_lstm
 
+    PYTHONBREAKPOINT=0 \
     CUDA_VISIBLE_DEVICES=2 fairseq-train /home/user/shaita/data/fairseq_test/experiment/ \
     --arch tutorial_simple_lstm \
     --skip-invalid-size-inputs-valid-test \
-    --save-dir /home/user/shaita/data/fairseq_test/checkpoints/experiment \
+    --save-dir /home/user/shaita/data/fairseq_test/checkpoints/experiment_2X \
     -s review \
     -t response \
     --knowledge description \
@@ -41,6 +42,7 @@ available data raw with description:
     --max-tokens 10000 \
     --max-source-positions 400 \
     --max-target-positions 400 \
+    --max-know-positions 400 \
     --dataset-impl raw \
     --task=translation \
     --max-epoch 10
@@ -80,18 +82,20 @@ train_src_rg: ~/scratch/fairseq_materialss/rrgen/en/data_bin_rg
 you can generate translations using fairseq-generate (for binarized data) or fairseq-interactive (for raw text).
 
     CUDA_VISIBLE_DEVICES=0 fairseq-generate \
-    /home/user/shaita/data/fairseq_test/dresp_raw_toyset/ \
-    --path /home/user/shaita/data/fairseq_test/checkpoints/dresp_10_10000_toy/checkpoint_best.pt \
+    /home/user/shaita/data/fairseq_test/experiment/ \
+    --path /home/user/shaita/data/fairseq_test/checkpoints/experiment_2X/checkpoint_best.pt \
     --skip-invalid-size-inputs-valid-test \
-    -s description \
+    -s review \
     -t response \
     --max-source-positions 400 \
     --max-target-positions 400 \
     --beam 10 \
+    --dataset-impl raw \
+    --knowledge description
+
     --sampling \
     --nbest 10\
     --sampling-topk 30\
-    --dataset-impl raw
 
 <GREETING> thank you for taking the time to write a review on your recent stay with us . we are so pleased to hear that you enjoyed your stay with us . we look forward to welcoming you back again soon . <SALUTATION>
 

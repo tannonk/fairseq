@@ -1,3 +1,15 @@
+experimetns2:
+giving encoder2 to the model:
+2020-12-11 15:21:33 | INFO | fairseq_cli.generate | NOTE: hypothesis and token scores are output in base 2
+2020-12-11 15:21:33 | INFO | fairseq_cli.generate | Translated 48 sentences (1897 tokens) in 3.8s (12.49 sentences/s, 493.47 tokens/s)
+2020-12-11 15:21:33 | INFO | fairseq_cli.generate | Generate test with beam=10: BLEU4 = 9.39, 50.9/21.9/12.7/8.2 (BP=0.509, ratio=0.597, syslen=1849, reflen=3098)
+
+experiments:
+2020-12-14 14:35:45 | INFO | fairseq_cli.generate | NOTE: hypothesis and token scores are output in base2
+2020-12-14 14:35:45 | INFO | fairseq_cli.generate | Translated 48 sentences (1874 tokens) in 4.3s (11.22 sentences/s, 437.91 tokens/s)
+2020-12-14 14:35:45 | INFO | fairseq_cli.generate | Generate test with beam=10: BLEU4 = 9.47, 53.1/22.9/13.0/8.3 (BP=0.498, ratio=0.589, syslen=1826, reflen=3098)
+
+
 
 Discovered this today
 # --model-parallel-size: total number of GPUs to parallelize model over

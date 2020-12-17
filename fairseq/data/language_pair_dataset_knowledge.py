@@ -34,6 +34,7 @@ def collate(
         )
 
     def check_alignment(alignment, src_len, tgt_len):
+        # I am not using it at the moment
         if alignment is None or len(alignment) == 0:
             return False
         if alignment[:, 0].max().item() >= src_len - 1 or alignment[:, 1].max().item() >= tgt_len - 1:
@@ -50,6 +51,7 @@ def collate(
         a tensor containing [1., 0.5, 0.5, 1] should be returned (since target
         index 3 is repeated twice)
         """
+        print('compute_alignment_weights')
         align_tgt = alignments[:, 1]
         _, align_tgt_i, align_tgt_c = torch.unique(
             align_tgt, return_inverse=True, return_counts=True)
@@ -57,33 +59,41 @@ def collate(
         return 1. / align_weights.float()
 
     id = torch.LongTensor([s['id'] for s in samples])
+    # ids are a list of sample ids in a batch
+    # for s in samples:
+    #     print(s)
+    # print('id', id)
+
     src_tokens = merge(
         'source', left_pad=left_pad_source,
         pad_to_length=pad_to_length['source'] if pad_to_length is not None else None
     )
-    # sort by descending source length
+
     src_lengths = torch.LongTensor([
         s['source'].ne(pad_idx).long().sum() for s in samples
     ])
 
     src2_tokens = merge('knowledge', left_pad=left_pad_source,
-                        pad_to_length=pad_to_length['source'] if pad_to_length is not None else None)
+                        pad_to_length=pad_to_length['knowledge'] if pad_to_length is not None else None)
 
-    src2_lengths = torch.LongTensor([
-        s['knowledge'].ne(pad_idx).long().sum() for s in samples
-    ])
-
-    src_lengths, sort_order = src_lengths.sort(descending=True)
+    # sort by descending source length
+    src_lengths, sort_order = src_lengths.sort(descending=False)
     id = id.index_select(0, sort_order)
     src_tokens = src_tokens.index_select(0, sort_order)
 
-    src2_lengths, sort_order2 = src2_lengths.sort(descending=True)
-    id = id.index_select(0, sort_order2)
-    src2_tokens = src2_tokens.index_select(0, sort_order2)
+    # #I shouldn't sort know;edge. Just leave it sorted for source
+    src2_tokens = src2_tokens.index_select(0, sort_order)
+    src2_lengths = torch.LongTensor([
+        s['knowledge'].ne(pad_idx).long().sum() for s in samples
+    ]).index_select(0, sort_order)
+
+    # if torch.all(id.eq(id2)):
+    #     print('equal')
 
     prev_output_tokens = None
     target = None
     if samples[0].get('target', None) is not None:
+        print('START MERGING')
         target = merge(
             'target', left_pad=left_pad_target,
             pad_to_length=pad_to_length['target'] if pad_to_length is not None else None,
@@ -111,8 +121,8 @@ def collate(
         ntokens = src_lengths.sum().item()
 
     batch = {
-        'id': id,
-        'nsentences': len(samples),
+        'id': id,  # id of a sample (sentence)
+        'nsentences': len(samples),  # length of a sentence
         'ntokens': ntokens,
         'net_input': {
             'src_tokens': src_tokens,
@@ -122,11 +132,13 @@ def collate(
         },
         'target': target,
     }
+
     if prev_output_tokens is not None:
         batch['net_input']['prev_output_tokens'] = prev_output_tokens
 
     if samples[0].get('alignment', None) is not None:
         bsz, tgt_sz = batch['target'].shape
+        # print('BATCH_SHAPE:', batch['target'].shape)
         src_sz = batch['net_input']['src_tokens'].shape[1]
 
         offsets = torch.zeros((len(sort_order), 2), dtype=torch.long)
@@ -149,6 +161,9 @@ def collate(
 
             batch['alignments'] = alignments
             batch['align_weights'] = align_weights
+    print('HERE IS MY BATCH')
+    # for item in batch:
+    #     print(item)
 
     return batch
 
@@ -280,6 +295,7 @@ class LanguageTripleDataset(FairseqDataset):
             # the padded lengths (thanks to BucketPadLengthDataset)
             num_tokens = np.vectorize(self.num_tokens, otypes=[np.long])
             print("About to call num_tokens")
+            # Not relevant to me atm
             self.bucketed_num_tokens = num_tokens(np.arange(len(self.src)))
             self.buckets = [
                 (None, num_tokens)
@@ -379,23 +395,23 @@ class LanguageTripleDataset(FairseqDataset):
             input_feeding=self.input_feeding,
             pad_to_length=pad_to_length,
         )
-        if self.src_lang_id is not None or self.tgt_lang_id is not None:
-            # unclear what this does at the moment
-            src_tokens = res['net_input']['src_tokens']
-            # know_tokens = res['net_input']['know_tokens']
-            bsz = src_tokens.size(0)
-            if self.src_lang_id is not None:
-                res['net_input']['src_lang_id'] = torch.LongTensor(
-                    [[self.src_lang_id]]
-                ).expand(bsz, 1).to(src_tokens)
-            if self.tgt_lang_id is not None:
-                res['tgt_lang_id'] = torch.LongTensor(
-                    [[self.tgt_lang_id]]
-                ).expand(bsz, 1).to(src_tokens)
-            if self.know_lang_id is not None:
-                res['net_input']['know_lang_id'] = torch.LongTensor(
-                    [[self.know_lang_id]]
-                ).expand(bsz, 1).to(src_tokens)
+        # if self.src_lang_id is not None or self.tgt_lang_id is not None:
+        #     # unclear what this does at the moment
+        #     src_tokens = res['net_input']['src_tokens']
+        #     # know_tokens = res['net_input']['know_tokens']
+        #     bsz = src_tokens.size(0)
+        #     if self.src_lang_id is not None:
+        #         res['net_input']['src_lang_id'] = torch.LongTensor(
+        #             [[self.src_lang_id]]
+        #         ).expand(bsz, 1).to(src_tokens)
+        #     if self.tgt_lang_id is not None:
+        #         res['tgt_lang_id'] = torch.LongTensor(
+        #             [[self.tgt_lang_id]]
+        #         ).expand(bsz, 1).to(src_tokens)
+        #     if self.know_lang_id is not None:
+        #         res['net_input']['know_lang_id'] = torch.LongTensor(
+        #             [[self.know_lang_id]]
+        #         ).expand(bsz, 1).to(src_tokens)
         return res
 
     def num_tokens(self, index):

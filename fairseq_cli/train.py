@@ -63,97 +63,97 @@ def main(args):
 
     # import pdb
     # pdb.set_trace()
-    print(args.valid_subset)
 
     # Load valid dataset (we load training data below, based on the latest checkpoint)
     for valid_sub_split in args.valid_subset.split(","):
-        print('valid_sub_split')
-        print(valid_sub_split)
         task.load_dataset(valid_sub_split, combine=False, epoch=1)
 
     # Build model and criterion
     model = task.build_model(args)
-    # print('INITIALIZED MODEL')
 
     # Criterions compute the loss function given the model and batch.
     # loss = criterion(model, batch)
 
-    # criterion = task.build_criterion(args)
-    # # print(criterion)
-    # logger.info(model)
-    # logger.info(
-    #     "model {}, criterion {}".format(
-    #         args.arch, criterion.__class__.__name__)
-    # )
-    #
-    # logger.info(
-    #     "num. model params: {} (num. trained: {})".format(
-    #         sum(p.numel() for p in model.parameters()),
-    #         sum(p.numel() for p in model.parameters() if p.requires_grad),
-    #     )
-    # )
-    #
-    # # (optionally) Configure quantization
-    # if args.quantization_config_path is not None:
-    #     quantizer = quantization_utils.Quantizer(
-    #         config_path=args.quantization_config_path,
-    #         max_epoch=args.max_epoch,
-    #         max_update=args.max_update,
-    #     )
-    # else:
-    #     quantizer = None
-    #
-    # # Build trainer
-    # # --model-parallel-size: total number of GPUs to parallelize model over
-    # # ModuleNotFoundError: No module named 'fairseq.model_parallel.megatron.mpu'
-    # if args.model_parallel_size == 1:
-    #     trainer = Trainer(args, task, model, criterion, quantizer)
-    # else:
-    #     trainer = MegatronTrainer(args, task, model, criterion)
-    #
-    # logger.info(
-    #     "training on {} devices (GPUs/TPUs)".format(args.distributed_world_size)
-    # )
-    # logger.info(
-    #     "max tokens per GPU = {} and max sentences per GPU = {}".format(
-    #         args.max_tokens, args.max_sentences
-    #     )
-    # )
-    #
-    # # Load the latest checkpoint if one is available and restore the
-    # # corresponding train iterator
-    # extra_state, epoch_itr = checkpoint_utils.load_checkpoint(args, trainer)
-    # if args.tpu:
-    #     import torch_xla.core.xla_model as xm
-    #
-    #     xm.rendezvous("load_checkpoint")  # wait for all workers
-    #     xm.mark_step()
-    #
-    # # Train until the learning rate gets too small
-    # max_epoch = args.max_epoch or math.inf
-    # lr = trainer.get_lr()
-    # train_meter = meters.StopwatchMeter()
-    # train_meter.start()
-    #
-    # while lr > args.min_lr and epoch_itr.next_epoch_idx <= max_epoch:
-    #     # train for one epoch
-    #     valid_losses, should_stop = train(args, trainer, task, epoch_itr)
-    #     if should_stop:
-    #         print('should_stop', should_stop)
-    #         break
-    #
-    #     # only use first validation loss to update the learning rate
-    #     lr = trainer.lr_step(epoch_itr.epoch, valid_losses[0])
-    #
-    #     # print("task", task)
-    #
-    #     epoch_itr = trainer.get_train_iterator(
-    #         epoch_itr.next_epoch_idx,
-    #         # sharded data: get train iterator for next epoch
-    #         load_dataset=task.has_sharded_data("train"),
-    #     )
-    # train_meter.stop()
-    # logger.info("done training in {:.1f} seconds".format(train_meter.sum))
+    criterion = task.build_criterion(args)
+    logger.info(model)
+    logger.info(
+        "model {}, criterion {}".format(
+            args.arch, criterion.__class__.__name__)
+    )
+
+    logger.info(
+        "num. model params: {} (num. trained: {})".format(
+            sum(p.numel() for p in model.parameters()),
+            sum(p.numel() for p in model.parameters() if p.requires_grad),
+        )
+    )
+
+    # (optionally) Configure quantization
+    if args.quantization_config_path is not None:
+        quantizer = quantization_utils.Quantizer(
+            config_path=args.quantization_config_path,
+            max_epoch=args.max_epoch,
+            max_update=args.max_update,
+        )
+    else:
+        quantizer = None
+
+    # for arg in vars(model):
+    #     print(arg, ':::', getattr(model, arg))
+
+    # Build trainer
+    # --model-parallel-size: total number of GPUs to parallelize model over
+    # ModuleNotFoundError: No module named 'fairseq.model_parallel.megatron.mpu'
+    if args.model_parallel_size == 1:
+        trainer = Trainer(args, task, model, criterion, quantizer)
+    else:
+        trainer = MegatronTrainer(args, task, model, criterion)
+
+    logger.info(
+        "training on {} devices (GPUs/TPUs)".format(args.distributed_world_size)
+    )
+    logger.info(
+        "max tokens per GPU = {} and max sentences per GPU = {}".format(
+            args.max_tokens, args.max_sentences
+        )
+    )
+
+    # Load the latest checkpoint if one is available and restore the
+    # corresponding train iterator
+    extra_state, epoch_itr = checkpoint_utils.load_checkpoint(args, trainer)
+    if args.tpu:
+        import torch_xla.core.xla_model as xm
+
+        xm.rendezvous("load_checkpoint")  # wait for all workers
+        xm.mark_step()
+
+    # Train until the learning rate gets too small
+    max_epoch = args.max_epoch or math.inf
+    lr = trainer.get_lr()
+    train_meter = meters.StopwatchMeter()
+    train_meter.start()
+
+    while lr > args.min_lr and epoch_itr.next_epoch_idx <= max_epoch:
+        # train for one epoch
+        breakpoint()
+        valid_losses, should_stop = train(args, trainer, task, epoch_itr)
+        breakpoint()
+        if should_stop:
+            print('should_stop', should_stop)
+            break
+
+        # only use first validation loss to update the learning rate
+        lr = trainer.lr_step(epoch_itr.epoch, valid_losses[0])
+
+        # print("task", task)
+
+        epoch_itr = trainer.get_train_iterator(
+            epoch_itr.next_epoch_idx,
+            # sharded data: get train iterator for next epoch
+            load_dataset=task.has_sharded_data("train"),
+        )
+    train_meter.stop()
+    logger.info("done training in {:.1f} seconds".format(train_meter.sum))
 
 
 def should_stop_early(args, valid_loss):
@@ -208,14 +208,18 @@ def train(args, trainer, task, epoch_itr):
         fix_batches_to_gpus=args.fix_batches_to_gpus,
         shuffle=(epoch_itr.next_epoch_idx > args.curriculum),
     )
+
     update_freq = (
         args.update_freq[epoch_itr.epoch - 1]
         if epoch_itr.epoch <= len(args.update_freq)
         else args.update_freq[-1]
     )
+
     itr = iterators.GroupedIterator(itr, update_freq)
+
     if getattr(args, "tpu", False):
         itr = tpu_data_loader(args, itr)
+
     progress = progress_bar.progress_bar(
         itr,
         log_format=args.log_format,
@@ -232,9 +236,13 @@ def train(args, trainer, task, epoch_itr):
 
     valid_subsets = args.valid_subset.split(",")
 
-    # print("line 218, valid_subsets::", valid_subsets)
     should_stop = False
+
+    breakpoint()
+
     for i, samples in enumerate(progress):
+        breakpoint()
+
         with metrics.aggregate("train_inner"), torch.autograd.profiler.record_function(
             "train_step-%d" % i
         ):
@@ -242,8 +250,11 @@ def train(args, trainer, task, epoch_itr):
             if log_output is None:  # OOM, overflow, ...
                 continue
 
+        breakpoint()
+
         # log mid-epoch stats
         num_updates = trainer.get_num_updates()
+        # print("num_updates", num_updates)
         if num_updates % args.log_interval == 0:
             stats = get_training_stats(
                 metrics.get_smoothed_values("train_inner"))
@@ -251,6 +262,7 @@ def train(args, trainer, task, epoch_itr):
 
             # reset mid-epoch stats after each log interval
             # the end-of-epoch stats will still be preserved
+            # print("COMING UP TO THE END OF THE EPOCH")
             metrics.reset_meters("train_inner")
 
         end_of_epoch = not itr.has_next()

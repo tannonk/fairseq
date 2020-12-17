@@ -67,7 +67,6 @@ def _main(args, output_file):
         utils.set_torch_seed(args.seed)
 
     use_cuda = torch.cuda.is_available() and not args.cpu
-
     # Load dataset splits
     task = tasks.setup_task(args)
     task.load_dataset(args.gen_subset)
@@ -77,6 +76,12 @@ def _main(args, output_file):
         src_dict = getattr(task, 'source_dictionary', None)
     except NotImplementedError:
         src_dict = None
+
+    try:
+        know_dict = getattr(task, 'source2_dictionary', None)
+    except NotImplementedError:
+        know_dict = None
+
     tgt_dict = task.target_dictionary
 
     # Load ensemble
@@ -153,9 +158,6 @@ def _main(args, output_file):
     wps_meter = TimeMeter()
     for sample in progress:
 
-        # import pdb
-        # pdb.set_trace()
-
         sample = utils.move_to_cuda(sample) if use_cuda else sample
         if 'net_input' not in sample:
             continue
@@ -165,6 +167,8 @@ def _main(args, output_file):
             prefix_tokens = sample['target'][:, :args.prefix_size]
 
         gen_timer.start()
+        breakpoint()
+        # THIS IS WHERE IT BREAKS!
         hypos = task.inference_step(generator, models, sample, prefix_tokens)
         num_generated_tokens = sum(len(h[0]['tokens']) for h in hypos)
         gen_timer.stop(num_generated_tokens)
@@ -178,12 +182,15 @@ def _main(args, output_file):
             # Remove padding
             src_tokens = utils.strip_pad(
                 sample['net_input']['src_tokens'][i, :], tgt_dict.pad())
+            src2_tokens = utils.strip_pad(
+                sample['net_input']['src2_tokens'][i, :], tgt_dict.pad())
             target_tokens = None
             if has_target:
                 target_tokens = utils.strip_pad(
                     sample['target'][i, :], tgt_dict.pad()).int().cpu()
 
             # Either retrieve the original sentences or regenerate them from tokens.
+            breakpoint()
             if align_dict is not None:
                 src_str = task.dataset(
                     args.gen_subset).src.get_original_text(sample_id)

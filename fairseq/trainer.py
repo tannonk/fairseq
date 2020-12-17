@@ -25,6 +25,8 @@ from fairseq.optim import lr_scheduler
 
 logger = logging.getLogger(__name__)
 
+PYTHONBREAKPOINT = 0
+
 
 class Trainer(object):
     """Main class for data parallel training.
@@ -396,7 +398,7 @@ class Trainer(object):
         if self._dummy_batch == "DUMMY":
             self._dummy_batch = samples[0]
 
-        # import pdb; pdb.set_trace()
+        breakpoint()
 
         self._set_seed()
         self.model.train()
@@ -406,8 +408,11 @@ class Trainer(object):
         metrics.log_start_time("train_wall", priority=800, round=0)
 
         # forward and backward pass
+
         logging_outputs, sample_size, ooms = [], 0, 0
+
         for i, sample in enumerate(samples):
+            breakpoint()
             sample = self._prepare_sample(sample)
             if sample is None:
                 # when sample is None, run forward/backward on a dummy batch
@@ -435,6 +440,8 @@ class Trainer(object):
             try:
                 with maybe_no_sync():
                     # forward and backward
+                    breakpoint()
+                    # IT BREAKS HERE
                     loss, sample_size_i, logging_output = self.task.train_step(
                         sample=sample,
                         model=self.model,
@@ -443,6 +450,7 @@ class Trainer(object):
                         update_num=self.get_num_updates(),
                         ignore_grad=is_dummy_batch,
                     )
+                    breakpoint()
                     del loss
 
                 logging_outputs.append(logging_output)
