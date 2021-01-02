@@ -1,15 +1,18 @@
-## Review Response Generation for Online Hospitality Reviews
+# Review Response Generation for Online Hospitality Reviews
 
-This directory contains the model, task, architecture and
-supporting scripts for review response generation for the hospitality domain. This
+This module contains the source code (model, task, architecture and
+supporting scripts) for review response generation for the hospitality domain. This
 bulk of this work was done as part of the ReAdvisor project
 at the University of Zurich 2020/2021. 
 
 This implementation is based on the paper 'Automating App
 Review Response Generation' by Gao et al. 2019
-[https://ieeexplore.ieee.org/document/8952476].
+[https://ieeexplore.ieee.org/document/8952476]. The main
+idea is to extend the basic encoder-decoder architecture,
+popularised by MT, with additional attribute features
+suitable for the task of seq2seq-based response generation.
 
-There are some slight differences to the implementation by
+There are some slight differences to the implementation proposed by
 Gao et al.:
 
 1. We use LSTMs instead of GRUs
@@ -17,12 +20,18 @@ Gao et al.:
    shown to bring little gain in performance in the original
    authors' ablation study.
 3. We do not implement the explicit review length component (yet)
-4. We use a custom sentiment engine which provides
+4. Since our additional attributes are valid vectors, e.g. a
+   category label {0, 1}, a review rating value {1, 5} and a
+   review sentiment score (either {1, 10} of a custom
+   aspect-level sentiment vector), we do not project these
+   values through a learned embedding layer.
+5. We use a custom sentiment engine which provides
    aspect-level sentiment analysis on input reviews in the
    form of a 25-d vector (a flattened 5x5 matrix).
 
 
-## Decoding
+
+### A Word on Decoding
 
 Instead of modifying (and potentially breaking) Fairseq's
 SequenceGenerator found in `sequence_generator.py`, we
@@ -43,3 +52,5 @@ for the initialisation of the SequenceGenerator object.
 Author: Tannon Kew
 
 Email: kew@cl.uzh.ch
+
+Date: 02.01.2021
