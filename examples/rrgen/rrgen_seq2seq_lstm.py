@@ -37,7 +37,7 @@ DEFAULT_MAX_TARGET_POSITIONS = 1e5
 
 
 @register_model('rrgen_lstm')
-class LSTMModel(FairseqEncoderDecoderModel):
+class RRGenLSTMModel(FairseqEncoderDecoderModel):
     def __init__(self, encoder, decoder):
         super().__init__(encoder, decoder)
 
@@ -98,9 +98,6 @@ class LSTMModel(FairseqEncoderDecoderModel):
     def build_model(cls, args, task):
         """Build a new model instance."""
         # make sure that all args are properly defaulted (in case there are any new ones)
-
-        # import pdb
-        # pdb.set_trace()
 
         rrgen_lstm_arch(args)
 
@@ -222,10 +219,6 @@ class LSTMModel(FairseqEncoderDecoderModel):
 
         # import pdb
         # pdb.set_trace()
-
-        # # NOTE requires to be on CPU (inefficient)
-        # if self.senti_scaler:
-        #     ext_senti = self.senti_scaler.transform(ext_senti).reshape(-1, 1)
 
         encoder_out = self.encoder(src_tokens, src_lengths=src_lengths)
         decoder_out = self.decoder(
@@ -892,7 +885,6 @@ def rrgen_lstm_arch(args):
     args.adaptive_softmax_cutoff = getattr(
         args, 'adaptive_softmax_cutoff', '10000,50000,200000')
     args.learning_rate = getattr(args, 'learning_rate', 0.001)
-    args.optimizer = getattr(args, 'optimizer', 'adam')
     args.skip_invalid_size_inputs_valid_test = getattr(
         args, 'skip_invalid_size_inputs_valid_test', True)
     args.max_tokens = getattr(args, 'max_tokens', 2000)

@@ -29,8 +29,6 @@ Gao et al.:
    aspect-level sentiment analysis on input reviews in the
    form of a 25-d vector (a flattened 5x5 matrix).
 
-
-
 ### A Word on Decoding
 
 Instead of modifying (and potentially breaking) Fairseq's
@@ -46,6 +44,21 @@ the `fairseq_task` base class.
 NB. funtionality is essentially the same in both
 `build_generator` methods. Only the import statement changes
 for the initialisation of the SequenceGenerator object.
+
+---
+
+## Changes
+
+1. For experiments performed before January 2021, the
+optimizer parameter was set by default with
+
+```
+@register_model_architecture('rrgen_lstm', 'rrgen_lstm_arch')
+def rrgen_lstm_arch(args):
+   ...
+```
+
+Now, optimizer needs to be passed explicitly with `fairseq-train`.
 
 ---
 

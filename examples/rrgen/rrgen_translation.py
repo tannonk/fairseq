@@ -34,7 +34,7 @@ from fairseq.data import (
     TruncateDataset,
 )
 
-from fairseq.tasks import FairseqTask, register_task
+from fairseq.tasks import LegacyFairseqTask, register_task
 # custom dataset
 from .rrgen_dataset import RRGenDataset
 
@@ -192,50 +192,6 @@ def load_rrgen_dataset(
         else:
             rate_dataset = None
 
-        # if use_sentiment is not None:
-        #     try:
-        #         with open(prefix + use_sentiment, 'r', encoding='utf8') as f:
-        #             # senti_dataset = [int(i.strip()) for i in f.readlines()]
-        #             senti_dataset = [i.strip() for i in f.readlines()]
-        #         senti_datasets.append(senti_dataset)
-        #     except:
-        #         sys.exit('[!] Failed to get ')
-        # else:
-        #     senti_dataset = None
-
-        # if use_category is not None and os.path.isfile(prefix + use_category):
-        #     # NOTE: for simplicity Hotel = 1, Restaurant = 2
-        #     # in files
-        #     with open(prefix + use_category, 'r', encoding='utf8') as f:
-        #         # cate_dataset = [int(i.strip()) for i in f.readlines()]
-        #         cate_dataset = [i.strip() for i in f.readlines()]
-        #     cate_datasets.append(cate_dataset)
-        # else:
-        #     cate_dataset = None
-
-        # if use_rating is not None and os.path.isfile(prefix + use_rating):
-        #     with open(prefix + use_rating, 'r', encoding='utf8') as f:
-        #         # rate_dataset = [int(i.strip()) for i in f.readlines()]
-        #         rate_dataset = [i.strip() for i in f.readlines()]
-        #     rate_datasets.append(rate_dataset)
-        # else:
-        #     rate_dataset = None
-
-        # import pdb
-        # pdb.set_trace()
-
-        # senti_dataset = data_utils.load_indexed_dataset(
-        #     prefix + 'senti', senti_dict, dataset_impl) if senti_dict else None
-        # senti_datasets.append(senti_dataset)
-
-        # rate_dataset = data_utils.load_indexed_dataset(
-        #     prefix + 'rate', rate_dict, dataset_impl) if rate_dict else None
-        # rate_datasets.append(rate_dataset)
-
-        # cate_dataset = data_utils.load_indexed_dataset(
-        #     prefix + 'cate', cate_dict, dataset_impl) if cate_dict else None
-        # cate_datasets.append(cate_dataset)
-
         if not combine:
             break
 
@@ -297,7 +253,7 @@ def load_rrgen_dataset(
 
 
 @register_task('rrgen_translation')
-class RRGenTranslationTask(FairseqTask):
+class RRGenTranslationTask(LegacyFairseqTask):
     """
     Translation approach for seq2seq review response
     generation (RRGen).
@@ -624,7 +580,7 @@ class RRGenTranslationTask(FairseqTask):
                 [model], Namespace(**gen_args))
         return model
     
-    def build_generator(self, models, args, seq_gen_cls=None):
+    def build_generator(self, models, args, seq_gen_cls=None, extra_gen_cls_kwargs=None):
         """
         Overrides `build_generator` func from
         `fairseq/tasks/fairseq_task.py`
@@ -634,7 +590,7 @@ class RRGenTranslationTask(FairseqTask):
         task-specific `sequence_generator_rrgen`
         """
 
-        import pdb;pdb.set_trace()
+        # import pdb;pdb.set_trace()
 
         if getattr(args, "score_reference", False):
             from fairseq.sequence_scorer import SequenceScorer
@@ -644,20 +600,11 @@ class RRGenTranslationTask(FairseqTask):
                 compute_alignment=getattr(args, "print_alignment", False),
             )
 
-        # if using rrgen task, import from custom
-        # sequence_generator script (Non-breaking!)
-        # if args.task == "rrgen_translation":
-
-
+        # import from custom sequence_generator script
         from .sequence_generator_rrgen import (
             SequenceGenerator,
             SequenceGeneratorWithAlignment,
         )
-        # else:
-        #     from fairseq.sequence_generator import (
-        #         SequenceGenerator,
-        #         SequenceGeneratorWithAlignment,
-        #     )
 
         # Choose search strategy. Defaults to Beam Search.
         sampling = getattr(args, "sampling", False)
@@ -667,6 +614,8 @@ class RRGenTranslationTask(FairseqTask):
         diverse_beam_strength = getattr(args, "diverse_beam_strength", 0.5)
         match_source_len = getattr(args, "match_source_len", False)
         diversity_rate = getattr(args, "diversity_rate", -1)
+        constrained = getattr(args, "constraints", False)
+        prefix_allowed_tokens_fn = getattr(args, "prefix_allowed_tokens_fn", None)
         if (
             sum(
                 int(cond)
@@ -706,12 +655,22 @@ class RRGenTranslationTask(FairseqTask):
             search_strategy = search.DiverseSiblingsSearch(
                 self.target_dictionary, diversity_rate
             )
+        elif constrained:
+            search_strategy = search.LexicallyConstrainedBeamSearch(
+                self.target_dictionary, args.constraints
+            )
+        elif prefix_allowed_tokens_fn:
+            search_strategy = search.PrefixConstrainedBeamSearch(
+                self.target_dictionary, prefix_allowed_tokens_fn
+            )
         else:
             search_strategy = search.BeamSearch(self.target_dictionary)
 
+        extra_gen_cls_kwargs = extra_gen_cls_kwargs or {}
         if seq_gen_cls is None:
             if getattr(args, "print_alignment", False):
                 seq_gen_cls = SequenceGeneratorWithAlignment
+                extra_gen_cls_kwargs["print_alignment"] = args.print_alignment
             else:
                 seq_gen_cls = SequenceGenerator
 
@@ -729,6 +688,7 @@ class RRGenTranslationTask(FairseqTask):
             match_source_len=getattr(args, "match_source_len", False),
             no_repeat_ngram_size=getattr(args, "no_repeat_ngram_size", 0),
             search_strategy=search_strategy,
+            **extra_gen_cls_kwargs,
         )
 
     def valid_step(self, sample, model, criterion):
