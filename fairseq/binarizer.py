@@ -11,6 +11,7 @@ from fairseq.file_io import PathManager
 from fairseq.tokenizer import tokenize_line
 
 
+
 def safe_readline(f):
     pos = f.tell()
     while True:
@@ -37,6 +38,9 @@ class Binarizer:
         nseq, ntok = 0, 0
         replaced = Counter()
 
+        # import pdb
+        # pdb.set_trace()
+
         def replaced_consumer(word, idx):
             if idx == dict.unk_index and word != dict.unk_word:
                 replaced.update([word])
@@ -57,18 +61,33 @@ class Binarizer:
                         id_list.append(dict.eos())
                     ids = torch.IntTensor(id_list)
                 else:
-                    ids = dict.encode_line(
-                        line=line,
-                        line_tokenizer=tokenize,
-                        add_if_not_exist=False,
-                        consumer=replaced_consumer,
-                        append_eos=append_eos,
-                        reverse_order=reverse_order,
-                    )
+                    if hasattr(dict, 'encode_line'):
+                        ids = dict.encode_line(
+                            line=line,
+                            line_tokenizer=tokenize,
+                            add_if_not_exist=False,
+                            consumer=replaced_consumer,
+                            append_eos=append_eos,
+                            reverse_order=reverse_order,
+                        )
+                    # normalised dictionaries for ext
+                    # attribute features (e.g. sentiment,
+                    # category, rating, etc.) don't have
+                    # attribute `encode_line`
+                    else:
+                        # NOTE issue arrises when 'encoding'
+                        # negative sentiment values with
+                        # binarized  datasets. Hack: scale
+                        # values from [-5, 5] to [0, 10] in
+                        # raw dataset before generating
+                        # normalisation dictionaries during preprocessing
+                        ids = torch.IntTensor([int(line.strip())])
+
                 nseq += 1
                 ntok += len(ids)
                 consumer(ids)
                 line = f.readline()
+
         return {
             "nseq": nseq,
             "nunk": sum(replaced.values()),

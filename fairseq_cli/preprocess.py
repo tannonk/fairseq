@@ -5,6 +5,12 @@
 # LICENSE file in the root directory of this source tree.
 """
 Data pre-processing: build vocabularies and binarize training data.
+
+Changes:
+ - Boolean variables added for the creation of A-component
+   attribute dictionaries (e.g. review sentiment, category,
+   rating) 
+
 """
 
 import logging
@@ -43,8 +49,17 @@ def main(args):
 
     task = tasks.get_task(args.task)
 
+    print(args)
+    import pdb;pdb.set_trace()
+
     def train_path(lang):
         return "{}{}".format(args.trainpref, ("." + lang) if lang else "")
+        
+    def test_path(lang):
+        return "{}{}".format(args.testpref, ("." + lang) if lang else "")
+        
+    def valid_path(lang):
+        return "{}{}".format(args.validpref, ("." + lang) if lang else "")
 
     def file_name(prefix, lang):
         fname = prefix
@@ -59,6 +74,11 @@ def main(args):
         return dest_path("dict", lang) + ".txt"
 
     def build_dictionary(filenames, src=False, tgt=False):
+
+        # import pdb
+        # pdb.set_trace()
+
+        # bitwise XOR: results to true if one (and only one) of the operands (evaluates to) true.
         assert src ^ tgt
         return task.build_dictionary(
             filenames,
@@ -112,6 +132,45 @@ def main(args):
                 tgt_dict = build_dictionary([train_path(args.target_lang)], tgt=True)
         else:
             tgt_dict = None
+
+    # ----------------------------------
+    # Consrtuct A-component dictionaries
+    # ----------------------------------
+
+    # import pdb; pdb.set_trace()
+
+    # expects file of np arrays of size (1, 25)
+    if args.sent_ext == 'alpha_sentiment':
+        
+        # cp test.alpha_sentiment to test.review-response_rg.alpha_sentiment
+        shutil.copy(
+            train_path(args.sent_ext),
+            f'{args.destdir}/train.{args.source_lang}-{args.target_lang}.{args.sent_ext}'
+            )
+        shutil.copy(
+            test_path(args.sent_ext),
+            f'{args.destdir}/test.{args.source_lang}-{args.target_lang}.{args.sent_ext}'
+            )
+        shutil.copy(
+            valid_path(args.sent_ext),
+            f'{args.destdir}/valid.{args.source_lang}-{args.target_lang}.{args.sent_ext}'
+            )
+
+        senti_dict = None
+
+    # assumed to be simple one int value per input text
+    elif args.sent_ext == 'sentiment':
+        senti_dict = task.build_normalisation_dictionary(
+            filenames=[train_path(args.sent_ext)], dict_path=dict_path(args.sent_ext), senti=True)
+
+    if args.cate_ext:
+        cate_dict = task.build_normalisation_dictionary(
+            filenames=[train_path(args.cate_ext)], dict_path=dict_path(args.cate_ext), cate=True)
+
+    if args.rate_ext:
+        rate_dict = task.build_normalisation_dictionary(
+            filenames=[train_path(args.rate_ext)], dict_path=dict_path(args.rate_ext), rate=True)
+
 
     src_dict.save(dict_path(args.source_lang))
     if target and tgt_dict is not None:
@@ -172,16 +231,26 @@ def main(args):
 
         ds.finalize(dataset_dest_file(args, output_prefix, lang, "idx"))
 
-        logger.info(
-            "[{}] {}: {} sents, {} tokens, {:.3}% replaced by {}".format(
-                lang,
-                input_file,
-                n_seq_tok[0],
-                n_seq_tok[1],
-                100 * sum(replaced.values()) / n_seq_tok[1],
-                vocab.unk_word,
+        try:
+            logger.info(
+                "[{}] {}: {} sents, {} tokens, {:.3}% replaced by {}".format(
+                    lang,
+                    input_file,
+                    n_seq_tok[0],
+                    n_seq_tok[1],
+                    100 * sum(replaced.values()) / n_seq_tok[1],
+                    vocab.unk_word,
+                )
             )
-        )
+        except AttributeError:
+            logger.info(
+                "[{}] {}: {} sents, {} tokens".format(
+                    lang,
+                    input_file,
+                    n_seq_tok[0],
+                    n_seq_tok[1],
+                )
+            )
 
     def make_binary_alignment_dataset(input_prefix, output_prefix, num_workers):
         nseq = [0]
@@ -240,16 +309,19 @@ def main(args):
         if args.dataset_impl == "raw":
             # Copy original text file to destination folder
             output_text_file = dest_path(
-                output_prefix + ".{}-{}".format(args.source_lang, args.target_lang),
+                output_prefix +
+                ".{}-{}".format(args.source_lang, args.target_lang),
                 lang,
             )
             shutil.copyfile(file_name(input_prefix, lang), output_text_file)
         else:
-            make_binary_dataset(vocab, input_prefix, output_prefix, lang, num_workers)
+            make_binary_dataset(vocab, input_prefix,
+                                output_prefix, lang, num_workers)
 
     def make_all(lang, vocab):
         if args.trainpref:
-            make_dataset(vocab, args.trainpref, "train", lang, num_workers=args.workers)
+            make_dataset(vocab, args.trainpref, "train",
+                         lang, num_workers=args.workers)
         if args.validpref:
             for k, validpref in enumerate(args.validpref.split(",")):
                 outprefix = "valid{}".format(k) if k > 0 else "valid"
@@ -259,7 +331,8 @@ def main(args):
         if args.testpref:
             for k, testpref in enumerate(args.testpref.split(",")):
                 outprefix = "test{}".format(k) if k > 0 else "test"
-                make_dataset(vocab, testpref, outprefix, lang, num_workers=args.workers)
+                make_dataset(vocab, testpref, outprefix,
+                             lang, num_workers=args.workers)
 
     def make_all_alignments():
         if args.trainpref and os.path.exists(args.trainpref + "." + args.align_suffix):
@@ -284,6 +357,17 @@ def main(args):
     make_all(args.source_lang, src_dict)
     if target:
         make_all(args.target_lang, tgt_dict)
+
+    if args.sent_ext:
+        make_all(args.sent_ext, senti_dict)
+
+    if args.cate_ext:
+        make_all(args.cate_ext, cate_dict)
+
+    if args.rate_ext:
+        make_all(args.rate_ext, rate_dict)
+
+
     if args.align_suffix:
         make_all_alignments()
 
@@ -300,7 +384,8 @@ def main(args):
                     for a, s, t in zip_longest(align_file, src_file, tgt_file):
                         si = src_dict.encode_line(s, add_if_not_exist=False)
                         ti = tgt_dict.encode_line(t, add_if_not_exist=False)
-                        ai = list(map(lambda x: tuple(x.split("-")), a.split()))
+                        ai = list(
+                            map(lambda x: tuple(x.split("-")), a.split()))
                         for sai, tai in ai:
                             srcidx = si[int(sai)]
                             tgtidx = ti[int(tai)]
@@ -319,7 +404,8 @@ def main(args):
 
         align_dict = {}
         for srcidx in freq_map.keys():
-            align_dict[srcidx] = max(freq_map[srcidx], key=freq_map[srcidx].get)
+            align_dict[srcidx] = max(
+                freq_map[srcidx], key=freq_map[srcidx].get)
 
         with open(
             os.path.join(
@@ -370,7 +456,8 @@ def binarize_alignments(args, filename, parse_alignment, output_prefix, offset, 
 def dataset_dest_prefix(args, output_prefix, lang):
     base = "{}/{}".format(args.destdir, output_prefix)
     if lang is not None:
-        lang_part = ".{}-{}.{}".format(args.source_lang, args.target_lang, lang)
+        lang_part = ".{}-{}.{}".format(args.source_lang,
+                                       args.target_lang, lang)
     elif args.only_source:
         lang_part = ""
     else:

@@ -16,6 +16,9 @@ from argparse import Namespace
 from collections import OrderedDict
 from typing import Any, Dict, List, Mapping, Optional
 
+# bugfix for multi-gpu training https://github.com/pytorch/pytorch/issues/37377 
+# os.environ['MKL_THREADING_LAYER'] = 'GNU'
+
 import torch
 import torch.distributed as dist
 from fairseq import utils
@@ -330,6 +333,9 @@ def call_main(cfg: FairseqConfig, main, **kwargs):
             nprocs=8,  # use all 8 TPU cores
         )
     else:
+        # import pdb
+        # pdb.set_trace()
+
         # single GPU main
         main(cfg, **kwargs)
 

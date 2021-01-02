@@ -100,7 +100,8 @@ class Trainer(object):
 
         # TODO(myleott): support tpu
         if self.cuda and self.data_parallel_world_size > 1:
-            self._grad_norm_buf = torch.cuda.DoubleTensor(self.data_parallel_world_size)
+            self._grad_norm_buf = torch.cuda.DoubleTensor(
+                self.data_parallel_world_size)
         else:
             self._grad_norm_buf = None
 
@@ -118,7 +119,8 @@ class Trainer(object):
             else:
                 self.cuda_env_arr = [self.cuda_env]
             if self.data_parallel_rank == 0:
-                utils.CudaEnvironment.pretty_print_cuda_env_list(self.cuda_env_arr)
+                utils.CudaEnvironment.pretty_print_cuda_env_list(
+                    self.cuda_env_arr)
         else:
             self.cuda_env = None
             self.cuda_env_arr = None
@@ -347,7 +349,8 @@ class Trainer(object):
             except Exception:
                 raise Exception(
                     "Cannot load model parameters from checkpoint {}; "
-                    "please ensure that the architectures match.".format(filename)
+                    "please ensure that the architectures match.".format(
+                        filename)
                 )
             extra_state = state["extra_state"]
             self._optim_history = state["optimizer_history"]
@@ -359,7 +362,8 @@ class Trainer(object):
             # only reload optimizer and lr_scheduler if they match
             last_optim = self._optim_history[-1]
             assert (
-                last_optim["criterion_name"] == self.get_criterion().__class__.__name__
+                last_optim["criterion_name"] == self.get_criterion(
+                ).__class__.__name__
             ), "Criterion does not match; please reset the optimizer (--reset-optimizer)."
             assert (
                 last_optim["optimizer_name"] == self.optimizer.__class__.__name__
@@ -819,7 +823,8 @@ class Trainer(object):
             )
 
         # log validation stats
-        logging_output = self._reduce_and_log_stats(logging_outputs, sample_size)
+        logging_output = self._reduce_and_log_stats(
+            logging_outputs, sample_size)
 
         return logging_output
 
@@ -907,7 +912,8 @@ class Trainer(object):
         self.lr_step_update()
         if self.quantizer:
             self.quantizer.step_update(self._num_updates)
-        metrics.log_scalar("num_updates", self._num_updates, weight=0, priority=200)
+        metrics.log_scalar("num_updates", self._num_updates,
+                           weight=0, priority=200)
 
     def clip_grad_norm(self, clip_norm):
         return self.optimizer.clip_grad_norm(clip_norm, aggregate_norm_fn=None)

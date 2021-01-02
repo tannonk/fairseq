@@ -101,8 +101,10 @@ def parse_args_and_arch(
             parse_known=parse_known,
             suppress_defaults=False,
         )
-        suppressed_parser = argparse.ArgumentParser(add_help=False, parents=[parser])
-        suppressed_parser.set_defaults(**{k: None for k, v in vars(args).items()})
+        suppressed_parser = argparse.ArgumentParser(
+            add_help=False, parents=[parser])
+        suppressed_parser.set_defaults(
+            **{k: None for k, v in vars(args).items()})
         args = suppressed_parser.parse_args(input_args)
         return argparse.Namespace(
             **{k: v for k, v in vars(args).items() if v is not None}
@@ -125,6 +127,7 @@ def parse_args_and_arch(
     # parse a second time after adding the *-specific arguments.
     # If input_args is given, we will parse those args instead of sys.argv.
     args, _ = parser.parse_known_args(input_args)
+
 
     # Add model-specific args to parser.
     if hasattr(args, "arch"):
@@ -286,6 +289,15 @@ def add_preprocess_args(parser):
     group.add_argument("--workers", metavar="N", default=1, type=int,
                        help="number of parallel workers")
     # fmt: on
+
+    # modification for rrgen
+    group.add_argument("--sent-ext", metavar="SENTI", default=None, type=str,
+                       help="file extension for sentiment annotations")
+    group.add_argument("--cate-ext", metavar="CATE", default=None, type=str,
+                       help="file extension for category annotations")
+    group.add_argument("--rate-ext", metavar="RATE", default=None, type=str,
+                       help="file extension for review rating annotations")
+    
     return parser
 
 

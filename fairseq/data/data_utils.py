@@ -111,6 +111,32 @@ def load_indexed_dataset(
         return ConcatDataset(datasets)
 
 
+def load_and_map_simple_dataset(path, dictionary, dataset_impl=None):
+    """
+    Helper function for loading (and mapping) in raw formatted dataset
+    values according to the relevant dictionary
+
+    Args:
+        path (str): path to 1-entry-per-line dataset (e.g., 'train.senti')
+        dictionary (~fairseq.data.Dictionary): data dictionary
+        dataset_impl (str, optional): which dataset implementation to use.
+    """
+    if dataset_impl != 'raw':
+        raise Exception(
+            f'Expected dataset-impl to be `raw` but got {dataset_impl}')
+
+    with open(path, 'r', encoding='utf8') as f:
+        try:
+            data = [dictionary[int(i.strip())] for i in f.readlines()]
+        except:
+            try:
+                data = [dictionary[i.strip()] for i in f.readlines()]
+            except:
+                raise Exception(
+                    f'Could not fetch dict values for input dataset items!')
+    return data
+
+
 @contextlib.contextmanager
 def numpy_seed(seed, *addl_seeds):
     """Context manager which seeds the NumPy PRNG with the specified seed and
@@ -218,7 +244,8 @@ def filter_by_size(indices, dataset, max_positions, raise_exception=False):
                 indices, dataset.size, max_positions
             )
     else:
-        indices, ignored = _filter_by_size_dynamic(indices, dataset.size, max_positions)
+        indices, ignored = _filter_by_size_dynamic(
+            indices, dataset.size, max_positions)
 
     if len(ignored) > 0 and raise_exception:
         raise Exception(

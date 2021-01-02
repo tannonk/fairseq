@@ -138,6 +138,9 @@ def _main(cfg: DictConfig, output_file):
     # (None if no unknown word replacement, empty if no path to align dictionary)
     align_dict = utils.load_align_dict(cfg.generation.replace_unk)
 
+    # import pdb
+    # pdb.set_trace()
+
     # Load dataset (possibly sharded)
     itr = task.get_batch_iterator(
         dataset=task.dataset(cfg.dataset.gen_subset),
@@ -160,6 +163,9 @@ def _main(cfg: DictConfig, output_file):
         log_interval=cfg.common.log_interval,
         default_log_format=("tqdm" if not cfg.common.no_progress_bar else "simple"),
     )
+
+    # import pdb
+    # pdb.set_trace()
 
     # Initialize generator
     gen_timer = StopwatchMeter()
@@ -186,6 +192,10 @@ def _main(cfg: DictConfig, output_file):
     has_target = True
     wps_meter = TimeMeter()
     for sample in progress:
+
+        # import pdb
+        # pdb.set_trace()
+
         sample = utils.move_to_cuda(sample) if use_cuda else sample
         if "net_input" not in sample:
             continue
