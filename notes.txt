@@ -9,7 +9,8 @@ fairseq-preprocess \
     --dataset-impl raw \
     --joined-dictionary \
     --destdir /home/user/shaita/data/fairseq_test/dresp_raw_toyset \
-    --task rrgen_translation_knowldg
+    --task translation
+    rrgen_translation_knowldg
 
 
 # ######################### TRAINING ########################################
@@ -59,8 +60,7 @@ available data raw with description:
 
 ## lstm_2encoders
 
-    PYTHONBREAKPOINT=0 \
-
+    #### review == source1, knowledge == source2 ####
 
     PYTHONBREAKPOINT=0 \
     CUDA_LAUNCH_BLOCKING=1
@@ -90,15 +90,18 @@ available data raw with description:
     --task rrgen_translation_knowldg
     -s2 description \
 
+
+    #### review == source1, knowledge == source2 ####
+
     PYTHONBREAKPOINT=0 \
     CUDA_VISIBLE_DEVICES=2 \
     fairseq-train /home/user/shaita/data/fairseq_test/experiment/ \
-    --arch lstm_2encoders \
+    --arch my_lstm_2encoders \
     --skip-invalid-size-inputs-valid-test \
-    --save-dir /home/user/shaita/data/fairseq_test/checkpoints/lstm_2encoders_2 \
-    -s review \
+    --save-dir /home/user/shaita/data/fairseq_test/checkpoints/lstm_2encoders_switched \
+    -s description \
     -t response \
-    --knowledge description \
+    --knowledge review \
     --optimizer adam \
     --lr 0.005 \
     --lr-shrink 0.5 \
@@ -107,9 +110,9 @@ available data raw with description:
     --max-target-positions 400 \
     --dataset-impl raw \
     --task=translation \
-    --max-epoch 1
+    --max-epoch 10
 
---num-workers 0 \
++ sending knowledge thru src_tokens worked, this means it's not about the descriptions themselves
 
 ### rrgen_lstm
 

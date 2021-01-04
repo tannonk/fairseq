@@ -26,8 +26,11 @@ DEFAULT_MAX_TARGET_POSITIONS = 500
 
 @register_model('lstm_2encoders')
 class LSTMModel2Encoders(FairseqEncoderDecoderModel):
-    def __init__(self, encoder, decoder):
+    def __init__(self, encoder, encoder2, decoder):
         super().__init__(encoder, decoder)
+        self.encoder = encoder
+        self.encoder2 = encoder2
+        assert isinstance(self.encoder2, FairseqEncoder)
 
     @staticmethod
     def add_args(parser):
@@ -86,7 +89,7 @@ class LSTMModel2Encoders(FairseqEncoderDecoderModel):
     def build_model(cls, args, task):
         """Build a new model instance."""
         # make sure that all args are properly defaulted (in case there are any new ones)
-        lstm_2encoders(args)
+        my_lstm_2encoders(args)
 
         if args.encoder_layers != args.decoder_layers:
             raise ValueError('--encoder-layers must match --decoder-layers')
@@ -150,7 +153,7 @@ class LSTMModel2Encoders(FairseqEncoderDecoderModel):
             pretrained_decoder_embed.weight.requires_grad = False
 
         encoder = LSTMEncoder(
-            dictionary=task.source2_dictionary,
+            dictionary=task.source_dictionary,
             embed_dim=args.encoder_embed_dim,
             hidden_size=args.encoder_hidden_size,
             num_layers=args.encoder_layers,
@@ -160,6 +163,19 @@ class LSTMModel2Encoders(FairseqEncoderDecoderModel):
             pretrained_embed=pretrained_encoder_embed,
             max_source_positions=max_source_positions,
         )
+
+        encoder2 = LSTMEncoder(
+            dictionary=task.source2_dictionary,
+            embed_dim=args.encoder_embed_dim,
+            hidden_size=args.encoder_hidden_size,
+            num_layers=args.encoder_layers,
+            dropout_in=args.encoder_dropout_in,
+            dropout_out=args.encoder_dropout_out,
+            bidirectional=args.encoder_bidirectional,
+            pretrained_embed=pretrained_encoder_embed,
+            max_know_positions=max_source_positions,
+        )
+
         decoder = LSTMDecoder(
             dictionary=task.target_dictionary,
             embed_dim=args.decoder_embed_dim,
@@ -179,7 +195,7 @@ class LSTMModel2Encoders(FairseqEncoderDecoderModel):
             max_target_positions=max_target_positions,
             residuals=False,
         )
-        return LSTMModel2Encoders(encoder, decoder)
+        return LSTMModel2Encoders(encoder, encoder2, decoder)
 
     def forward(
         self,
@@ -188,18 +204,25 @@ class LSTMModel2Encoders(FairseqEncoderDecoderModel):
         src2_tokens,
         src2_lengths,
         prev_output_tokens,
+        enforce_sorted=False,
         incremental_state: Optional[Dict[str, Dict[str, Optional[Tensor]]]] = None,
     ):
 
-        print('Sizes:::::::::::::::::')
-        print(src_tokens.size())
-        print(src_tokens.dtype)
-        print(src_lengths.size())
-        print('2')
-        print(src2_tokens.size())
-        print(src2_tokens.dtype)
-        print(src2_lengths.size())
-        encoder_out = self.encoder(src2_tokens, src_lengths=src2_lengths)
+        # print('Sizes:::::::::::::::::')
+        # print(src_tokens.size())
+        # print(src_tokens.dtype)
+        # print(src_lengths.size())
+        # print('2')
+        # print(src2_tokens.size())
+        # print(src2_tokens.dtype)
+        # print(src2_lengths.size())
+
+        encoder1_out = self.encoder(src_tokens, src_lengths=src_lengths,
+                                    enforce_sorted=enforce_sorted)
+        encoder2_out = self.encoder2(src2_tokens, src_lengths=src2_lengths,
+                                     enforce_sorted=enforce_sorted)
+        encoder_out = encoder1_out + encoder2_out
+
         decoder_out = self.decoder(
             prev_output_tokens, encoder_out=encoder_out, incremental_state=incremental_state
         )
@@ -210,10 +233,18 @@ class LSTMEncoder(FairseqEncoder):
     """LSTM encoder."""
 
     def __init__(
-        self, dictionary, embed_dim=512, hidden_size=512, num_layers=1,
-        dropout_in=0.1, dropout_out=0.1, bidirectional=False,
-        left_pad=True, pretrained_embed=None, padding_idx=None,
+        self, dictionary,
+        embed_dim=512,
+        hidden_size=512,
+        num_layers=1,
+        dropout_in=0.1,
+        dropout_out=0.1,
+        bidirectional=False,
+        left_pad=True,
+        pretrained_embed=None,
+        padding_idx=None,
         max_source_positions=DEFAULT_MAX_SOURCE_POSITIONS,
+        max_know_positions=DEFAULT_MAX_SOURCE_POSITIONS,
     ):
         super().__init__(dictionary)
         self.num_layers = num_layers
@@ -245,8 +276,8 @@ class LSTMEncoder(FairseqEncoder):
 
     def forward(
         self,
-        src_tokens: Tensor,
-        src_lengths: Tensor,
+        src_tokens,
+        src_lengths,
         enforce_sorted: bool = False,
     ):
         """
@@ -261,6 +292,7 @@ class LSTMEncoder(FairseqEncoder):
                 required. Default: True.
         """
         if self.left_pad:
+            # print('YES left_pad_source')
             # nn.utils.rnn.pack_padded_sequence requires right-padding;
             # convert left-padding to right-padding
             src_tokens = utils.convert_padding_direction(
@@ -364,9 +396,16 @@ class LSTMDecoder(FairseqIncrementalDecoder):
     """LSTM decoder."""
 
     def __init__(
-        self, dictionary, embed_dim=512, hidden_size=512, out_embed_dim=512,
-        num_layers=1, dropout_in=0.1, dropout_out=0.1, attention=True,
-        encoder_output_units=512, pretrained_embed=None,
+        self, dictionary,
+        embed_dim=128,
+        hidden_size=128,
+        out_embed_dim=128,
+        num_layers=1,
+        dropout_in=0.1,
+        dropout_out=0.1,
+        attention=True,
+        encoder_output_units=128,
+        pretrained_embed=None,
         share_input_output_embed=False, adaptive_softmax_cutoff=None,
         max_target_positions=DEFAULT_MAX_TARGET_POSITIONS,
         residuals=False,
@@ -443,6 +482,8 @@ class LSTMDecoder(FairseqIncrementalDecoder):
         encoder_out: Optional[Tuple[Tensor, Tensor, Tensor, Tensor]] = None,
         incremental_state: Optional[Dict[str, Dict[str, Optional[Tensor]]]] = None,
     ):
+        print("IN THE DECODER NOW")
+
         """
         Similar to *forward* but only return features.
         """
@@ -646,8 +687,8 @@ def Linear(in_features, out_features, bias=True, dropout=0.):
     return m
 
 
-@register_model_architecture('lstm_2encoders', 'lstm_2encoders')
-def lstm_2encoders(args):
+@register_model_architecture('lstm_2encoders', 'my_lstm_2encoders')
+def my_lstm_2encoders(args):
     args.dropout = getattr(args, 'dropout', 0.1)
     args.encoder_embed_dim = getattr(args, 'encoder_embed_dim', 256)
     args.encoder_embed_path = getattr(args, 'encoder_embed_path', None)

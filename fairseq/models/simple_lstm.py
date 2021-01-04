@@ -235,6 +235,7 @@ class SimpleLSTMEncoder(FairseqEncoder):
         # src_lengths (LongTensor): lengths of each source sentence of shape `(batch)`
 
         if self.args.left_pad_source:
+            print('YES left_pad_source')
             # Convert left-padding to right-padding.
             src_tokens = utils.convert_padding_direction(
                 src_tokens,
