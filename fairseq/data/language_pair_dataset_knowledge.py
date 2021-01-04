@@ -229,7 +229,9 @@ class LanguageTripleDataset(FairseqDataset):
             assert know_dict.eos() == tgt_dict.eos()
             assert know_dict.unk() == tgt_dict.unk()
 
-        print(len(src), len(tgt), len(know))
+        print(len(src))
+        print(len(tgt))
+        print(len(know))
 
         if tgt is not None:
             assert len(src) == len(

@@ -29,10 +29,13 @@ available data raw with description:
 ### simple_lstm
 
     PYTHONBREAKPOINT=0 \
+    CUDA_LAUNCH_BLOCKING=1
+
+    PYTHONBREAKPOINT=0 \
     CUDA_VISIBLE_DEVICES=2 fairseq-train /home/user/shaita/data/fairseq_test/experiment/ \
     --arch tutorial_simple_lstm \
     --skip-invalid-size-inputs-valid-test \
-    --save-dir /home/user/shaita/data/fairseq_test/checkpoints/experiment_2X \
+    --save-dir /home/user/shaita/data/fairseq_test/checkpoints/experiment_1 \
     -s review \
     -t response \
     --knowledge description \
@@ -42,16 +45,71 @@ available data raw with description:
     --max-tokens 10000 \
     --max-source-positions 400 \
     --max-target-positions 400 \
-    --max-know-positions 400 \
     --dataset-impl raw \
     --task=translation \
-    --max-epoch 10
+    --max-epoch 1
 
+    --num-workers 0 \
+    --ddp-backend=no_c10d \
     --task rrgen_translation_knowldg
     -s2 description \
 
     Produces exactly the same output for all samples: 	<GREETING> thank you for taking the time to review your recent stay with us . i am delighted to hear that you enjoyed your stay with us . we look forward to welcoming you back again soon . <SALUTATION>
 
+
+## lstm_2encoders
+
+    PYTHONBREAKPOINT=0 \
+
+
+    PYTHONBREAKPOINT=0 \
+    CUDA_LAUNCH_BLOCKING=1
+
+    PYTHONBREAKPOINT=0 \
+    CUDA_VISIBLE_DEVICES=2 \
+    fairseq-train /home/user/shaita/data/fairseq_test/experiment/ \
+    --arch lstm_2encoders_arch \
+    --skip-invalid-size-inputs-valid-test \
+    --save-dir /home/user/shaita/data/fairseq_test/checkpoints/lstm_2encoders_0 \
+    -s review \
+    -t response \
+    --knowledge description \
+    --optimizer adam \
+    --lr 0.005 \
+    --lr-shrink 0.5 \
+    --max-tokens 10000 \
+    --max-source-positions 400 \
+    --max-target-positions 400 \
+    --dataset-impl raw \
+    --task=translation \
+    --num-workers 0 \
+    --max-epoch 1
+
+    --cpu \
+    --ddp-backend=no_c10d \
+    --task rrgen_translation_knowldg
+    -s2 description \
+
+    PYTHONBREAKPOINT=0 \
+    CUDA_VISIBLE_DEVICES=2 \
+    fairseq-train /home/user/shaita/data/fairseq_test/experiment/ \
+    --arch lstm_2encoders \
+    --skip-invalid-size-inputs-valid-test \
+    --save-dir /home/user/shaita/data/fairseq_test/checkpoints/lstm_2encoders_2 \
+    -s review \
+    -t response \
+    --knowledge description \
+    --optimizer adam \
+    --lr 0.005 \
+    --lr-shrink 0.5 \
+    --max-tokens 10000 \
+    --max-source-positions 400 \
+    --max-target-positions 400 \
+    --dataset-impl raw \
+    --task=translation \
+    --max-epoch 1
+
+--num-workers 0 \
 
 ### rrgen_lstm
 
@@ -257,6 +315,3 @@ decode_src_rg_greedy:
 fairseq-generate data-bin/iwslt14.tokenized.de-en \
   --path checkpoints/checkpoint_best.pt \
   --beam 5 \
-  --remove-bpe
-
---------------------------------------------------------------------------------

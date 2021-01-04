@@ -138,12 +138,19 @@ class SimpleLSTMModel(FairseqEncoderDecoderModel):
         prev_output_tokens,
         enforce_sorted=False,
     ):
-        encoder_out = self.encoder(src_tokens, src_lengths=src_lengths,
-                                   enforce_sorted=enforce_sorted)
+        print(src_tokens.size())
+        print(src_tokens.dtype)
+        print(src_lengths.size())
+        print('2')
+        print(src2_tokens.size())
+        print(src2_tokens.dtype)
+        print(src2_lengths.size())
+        # encoder_out = self.encoder(src_tokens, src_lengths=src_lengths,
+        # enforce_sorted=enforce_sorted)
         encoder2_out = self.encoder2(
             src2_tokens, src_lengths=src2_lengths, enforce_sorted=enforce_sorted)
-        encoder_all_out = encoder_out + encoder2_out
-        decoder_out = self.decoder(prev_output_tokens, encoder_out=encoder_all_out)
+        # encoder_all_out = encoder_out + encoder2_out
+        decoder_out = self.decoder(prev_output_tokens, encoder_out=encoder2_out)
 
         return decoder_out
 
