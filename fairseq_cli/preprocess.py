@@ -81,8 +81,8 @@ def main(args):
 
     def build_dictionary(filenames, src=False, tgt=False):
 
-        import pdb
-        pdb.set_trace()
+        # import pdb
+        # pdb.set_trace()
 
         # bitwise XOR: results to true if one (and only one) of the operands (evaluates to) true.
         assert src ^ tgt
@@ -111,9 +111,16 @@ def main(args):
             src_dict = task.load_dictionary(args.tgtdict)
         else:
             assert args.trainpref, "--trainpref must be set if --srcdict is not specified"
-            src_dict = build_dictionary(
-                {train_path(lang) for lang in [args.source_lang, args.target_lang]}, src=True
-            )
+            if USE_KNOWLEDGE:
+                #TODO: replace hardcoded 'description with
+                #args.knowledge_lang type handle
+                src_dict = build_dictionary(
+                    {train_path(lang) for lang in [args.source_lang, args.target_lang, 'description']}, src=True
+                )
+            else:
+                src_dict = build_dictionary(
+                    {train_path(lang) for lang in [args.source_lang, args.target_lang]}, src=True
+                )
         tgt_dict = src_dict
     else:
         if args.srcdict:
@@ -137,21 +144,21 @@ def main(args):
     # Consrtuct A-component dictionaries
     # ----------------------------------
 
-    if USE_SENTIMENT:
-        senti_dict = task.build_normalisation_dictionary(
-            filenames=[train_path(USE_SENTIMENT)], dict_path=dict_path(USE_SENTIMENT), senti=True)
+    # if USE_SENTIMENT:
+    #     senti_dict = task.build_normalisation_dictionary(
+    #         filenames=[train_path(USE_SENTIMENT)], dict_path=dict_path(USE_SENTIMENT), senti=True)
 
-    if USE_CATEGORY:
-        cate_dict = task.build_normalisation_dictionary(
-            filenames=[train_path(USE_CATEGORY)], dict_path=dict_path(USE_CATEGORY), cate=True)
+    # if USE_CATEGORY:
+    #     cate_dict = task.build_normalisation_dictionary(
+    #         filenames=[train_path(USE_CATEGORY)], dict_path=dict_path(USE_CATEGORY), cate=True)
 
-    if USE_RATING:
-        rate_dict = task.build_normalisation_dictionary(
-            filenames=[train_path(USE_RATING)], dict_path=dict_path(USE_RATING), rate=True)
+    # if USE_RATING:
+    #     rate_dict = task.build_normalisation_dictionary(
+    #         filenames=[train_path(USE_RATING)], dict_path=dict_path(USE_RATING), rate=True)
 
-    if USE_KNOWLEDGE:
-        know_dict = task.build_normalisation_dictionary(
-            filenames=[train_path(USE_KNOWLEDGE)], dict_path=dict_path(USE_KNOWLEDGE), know=True)
+    # if USE_KNOWLEDGE:
+    #     know_dict = task.build_normalisation_dictionary(
+    #         filenames=[train_path(USE_KNOWLEDGE)], dict_path=dict_path(USE_KNOWLEDGE), know=True)
 
     # if USE_SENTIMENT:
     #     senti_dict = task.build_normalisation_dictionary(
@@ -354,7 +361,7 @@ def main(args):
         make_all(USE_RATING, rate_dict)
 
     if USE_KNOWLEDGE:
-        make_all(USE_KNOWLEDGE, know_dict)
+        make_all(USE_KNOWLEDGE, src_dict)
 
     # if USE_SENTIMENT:
     #     make_all('senti', senti_dict)
