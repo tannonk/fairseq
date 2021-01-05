@@ -32,7 +32,9 @@ def infer_language_pair(path):
 
 def collate_tokens(values, pad_idx, eos_idx=None, left_pad=False, move_eos_to_beginning=False, pad_to_length=None):
     """Convert a list of 1d tensors into a padded 2d tensor."""
+    # print(values)
     size = max(v.size(0) for v in values)
+    # print("size", size)
     size = size if pad_to_length is None else max(size, pad_to_length)
     res = values[0].new(len(values), size).fill_(pad_idx)
 
@@ -50,6 +52,8 @@ def collate_tokens(values, pad_idx, eos_idx=None, left_pad=False, move_eos_to_be
 
     for i, v in enumerate(values):
         copy_tensor(v, res[i][size - len(v):] if left_pad else res[i][:len(v)])
+
+    # print("final version", res)
     return res
 
 

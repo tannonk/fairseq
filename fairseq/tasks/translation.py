@@ -273,6 +273,8 @@ class TranslationTask(FairseqTask):
         # load dictionaries
         src_dict = cls.load_dictionary(os.path.join(
             paths[0], 'dict.{}.txt'.format(args.source_lang)))
+
+        print("src_dict", src_dict)
         tgt_dict = cls.load_dictionary(os.path.join(
             paths[0], 'dict.{}.txt'.format(args.target_lang)))
         assert src_dict.pad() == tgt_dict.pad()

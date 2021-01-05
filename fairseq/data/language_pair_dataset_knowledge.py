@@ -27,6 +27,7 @@ def collate(
         return {}
 
     def merge(key, left_pad, move_eos_to_beginning=False, pad_to_length=None):
+        # print([s[key] for s in samples])
         return data_utils.collate_tokens(
             [s[key] for s in samples],
             pad_idx, eos_idx, left_pad, move_eos_to_beginning,
@@ -73,14 +74,17 @@ def collate(
         s['source'].ne(pad_idx).long().sum() for s in samples
     ])
 
+    print("left_pad_source", left_pad_source)
+
     src2_tokens = merge('knowledge', left_pad=left_pad_source,
-                        pad_to_length=pad_to_length['knowledge'] if pad_to_length is not None else None)
+                        pad_to_length=pad_to_length['source'] if pad_to_length is not None else None)
 
     # sort by descending source length
     src_lengths, sort_order = src_lengths.sort(descending=False)
     id = id.index_select(0, sort_order)
     src_tokens = src_tokens.index_select(0, sort_order)
 
+    print(sort_order.size)
     # #I shouldn't sort know;edge. Just leave it sorted for source
     src2_tokens = src2_tokens.index_select(0, sort_order)
     src2_lengths = torch.LongTensor([
@@ -229,7 +233,9 @@ class LanguageTripleDataset(FairseqDataset):
             assert know_dict.eos() == tgt_dict.eos()
             assert know_dict.unk() == tgt_dict.unk()
 
-        print(len(src), len(tgt), len(know))
+        print(len(src))
+        print(len(tgt))
+        print(len(know))
 
         if tgt is not None:
             assert len(src) == len(
