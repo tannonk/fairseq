@@ -196,6 +196,9 @@ class LSTMModel2Encoders(FairseqEncoderDecoderModel):
             max_target_positions=max_target_positions,
             residuals=False,
         )
+
+        # breakpoint()
+
         return LSTMModel2Encoders(encoder, encoder2, decoder)
 
     @staticmethod
