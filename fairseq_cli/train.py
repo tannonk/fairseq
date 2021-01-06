@@ -135,9 +135,9 @@ def main(args):
 
     while lr > args.min_lr and epoch_itr.next_epoch_idx <= max_epoch:
         # train for one epoch
-        breakpoint()
+        # breakpoint()
         valid_losses, should_stop = train(args, trainer, task, epoch_itr)
-        breakpoint()
+        # breakpoint()
         if should_stop:
             print('should_stop', should_stop)
             break
@@ -238,10 +238,10 @@ def train(args, trainer, task, epoch_itr):
 
     should_stop = False
 
-    breakpoint()
+    # breakpoint()
 
     for i, samples in enumerate(progress):
-        breakpoint()
+        # breakpoint()
 
         with metrics.aggregate("train_inner"), torch.autograd.profiler.record_function(
             "train_step-%d" % i
@@ -250,7 +250,7 @@ def train(args, trainer, task, epoch_itr):
             if log_output is None:  # OOM, overflow, ...
                 continue
 
-        breakpoint()
+        # breakpoint()
 
         # log mid-epoch stats
         num_updates = trainer.get_num_updates()

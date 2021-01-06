@@ -165,7 +165,8 @@ class LSTMModel2Encoders(FairseqEncoderDecoderModel):
         )
 
         encoder2 = LSTMEncoder(
-            dictionary=task.source2_dictionary,
+            # dictionary=task.source2_dictionary,
+            dictionary=task.source_dictionary,
             embed_dim=args.encoder_embed_dim,
             hidden_size=args.encoder_hidden_size,
             num_layers=args.encoder_layers,
@@ -197,6 +198,41 @@ class LSTMModel2Encoders(FairseqEncoderDecoderModel):
         )
         return LSTMModel2Encoders(encoder, encoder2, decoder)
 
+    @staticmethod
+    def combine_encoder_outputs(u: Tuple[Tensor], v: Tuple[Tensor]):
+        """
+        Method for combining outputs of two encoders.
+
+        E.g. Ghazvininejad et al. 2018 find summation works best
+
+        Args:
+            u: output of encoder 1 (for an LSTM, this is a
+            4-tuple containing encoder_outs, encoder_hiddens, encoder_cells, encoder_padding_mask)
+            v: output of encoder 2 (with same structure as u)
+        """
+
+        def describe(t):
+            print(f'encoder_out is a {type(t)} of length {len(t)}')
+            print(f'encoder_outs is a {t[0].dtype} {type(t[0])} and has shape: {t[0].shape}')
+            print(f'encoder_hiddens is a {t[1].dtype} {type(t[1])} and has shape: {t[1].shape}')
+            print(f'encoder_cells is a {t[2].dtype} {type(t[2])} and has shape: {t[2].shape}')
+            print(f'encoder_padding_mask is a {t[3].dtype} {type(t[3])} and has shape: {t[3].shape}')
+
+        # describe(u)
+        # describe(v)
+
+        breakpoint()
+        
+        # let's try concatenation
+        encoder_outs = torch.cat((u[0], v[0]), dim=0)
+        encoder_hiddens = torch.cat((u[1], v[1]), dim=0)
+        encoder_cells = torch.cat((u[2], v[2]), dim=0)
+        encoder_padding_mask = torch.cat((u[3], v[3]), dim=0)
+
+        x = (encoder_outs, encoder_hiddens, encoder_cells, encoder_padding_mask)
+
+        return x
+
     def forward(
         self,
         src_tokens,
@@ -217,15 +253,24 @@ class LSTMModel2Encoders(FairseqEncoderDecoderModel):
         # print(src2_tokens.dtype)
         # print(src2_lengths.size())
 
+
         encoder1_out = self.encoder(src_tokens, src_lengths=src_lengths,
                                     enforce_sorted=enforce_sorted)
         encoder2_out = self.encoder2(src2_tokens, src_lengths=src2_lengths,
                                      enforce_sorted=enforce_sorted)
-        encoder_out = encoder1_out + encoder2_out
+        
+        # Moment of truth...
+        encoder_out = self.combine_encoder_outputs(encoder1_out, encoder2_out)
+        
+        # NOTE this simply adds 2 tuples together, resulting in a
+        # tuple of len 8. The decoder only looks at the
+        # first 4 elements of the encoder_out tuple
+        # encoder_out = encoder1_out + encoder2_out
 
         decoder_out = self.decoder(
             prev_output_tokens, encoder_out=encoder_out, incremental_state=incremental_state
         )
+
         return decoder_out
 
 
@@ -471,6 +516,10 @@ class LSTMDecoder(FairseqIncrementalDecoder):
         incremental_state: Optional[Dict[str, Dict[str, Optional[Tensor]]]] = None,
         src_lengths: Optional[Tensor] = None,
     ):
+    
+        # print("IN THE DECODER NOW")
+        breakpoint()
+        
         x, attn_scores = self.extract_features(
             prev_output_tokens, encoder_out, incremental_state
         )
@@ -482,7 +531,6 @@ class LSTMDecoder(FairseqIncrementalDecoder):
         encoder_out: Optional[Tuple[Tensor, Tensor, Tensor, Tensor]] = None,
         incremental_state: Optional[Dict[str, Dict[str, Optional[Tensor]]]] = None,
     ):
-        print("IN THE DECODER NOW")
 
         """
         Similar to *forward* but only return features.

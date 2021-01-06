@@ -74,7 +74,7 @@ def collate(
         s['source'].ne(pad_idx).long().sum() for s in samples
     ])
 
-    print("left_pad_source", left_pad_source)
+    # print("left_pad_source", left_pad_source)
 
     src2_tokens = merge('knowledge', left_pad=left_pad_source,
                         pad_to_length=pad_to_length['source'] if pad_to_length is not None else None)
@@ -84,7 +84,7 @@ def collate(
     id = id.index_select(0, sort_order)
     src_tokens = src_tokens.index_select(0, sort_order)
 
-    print(sort_order.size)
+    # print(sort_order.size)
     # #I shouldn't sort know;edge. Just leave it sorted for source
     src2_tokens = src2_tokens.index_select(0, sort_order)
     src2_lengths = torch.LongTensor([
@@ -97,7 +97,7 @@ def collate(
     prev_output_tokens = None
     target = None
     if samples[0].get('target', None) is not None:
-        print('START MERGING')
+        # print('START MERGING')
         target = merge(
             'target', left_pad=left_pad_target,
             pad_to_length=pad_to_length['target'] if pad_to_length is not None else None,
@@ -165,7 +165,8 @@ def collate(
 
             batch['alignments'] = alignments
             batch['align_weights'] = align_weights
-    print('HERE IS MY BATCH')
+    
+    # print('HERE IS MY BATCH')
     # for item in batch:
     #     print(item)
 
@@ -233,9 +234,9 @@ class LanguageTripleDataset(FairseqDataset):
             assert know_dict.eos() == tgt_dict.eos()
             assert know_dict.unk() == tgt_dict.unk()
 
-        print(len(src))
-        print(len(tgt))
-        print(len(know))
+        # print(len(src))
+        # print(len(tgt))
+        # print(len(know))
 
         if tgt is not None:
             assert len(src) == len(
@@ -243,6 +244,8 @@ class LanguageTripleDataset(FairseqDataset):
         if know is not None:
             assert len(know) == len(
                 tgt), "Source and target must contain the same number of examples"
+
+        # import pdb; pdb.set_trace()
 
         self.src = src
         self.tgt = tgt
@@ -254,7 +257,8 @@ class LanguageTripleDataset(FairseqDataset):
 
         self.src_dict = src_dict
         self.tgt_dict = tgt_dict
-        self.know_dict = know_dict
+        # self.know_dict = src_dict
+        self.know_dict = know_dict # NOTE initialised in translation task as src_dict
 
         self.left_pad_source = left_pad_source
         self.left_pad_target = left_pad_target
@@ -270,12 +274,12 @@ class LanguageTripleDataset(FairseqDataset):
         self.eos = (eos if eos is not None else src_dict.eos())
         self.src_lang_id = src_lang_id
         self.tgt_lang_id = tgt_lang_id
-        print("tgt_lang_id", tgt_lang_id)
+        # print("tgt_lang_id", tgt_lang_id)
         self.know_lang_id = know_lang_id
 
         # this is not relevant to me now
         if num_buckets > 0:
-            print('num_buckets', num_buckets)
+            # print('num_buckets', num_buckets)
             from fairseq.data import BucketPadLengthDataset
             self.src = BucketPadLengthDataset(
                 self.src,

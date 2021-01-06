@@ -55,13 +55,15 @@ def load_langpair_dataset(
     tgt_datasets = []
     know_datasets = []
 
+    # import pdb; pdb.set_trace()
+
     for k in itertools.count():
 
         split_k = split + (str(k) if k > 0 else '')
 
         # infer langcode
-        if split_exists(split_k, know, tgt, know, data_path):
-            know_prefix = os.path.join(data_path, '{}.{}-{}.'.format(split_k, know, tgt))
+        # if split_exists(split_k, src, tgt, know, data_path):
+        #     prefix = os.path.join(data_path, '{}.{}-{}.'.format(split_k, src, tgt))
         if split_exists(split_k, src, tgt, src, data_path):
             prefix = os.path.join(data_path, '{}.{}-{}.'.format(split_k, src, tgt))
         elif split_exists(split_k, tgt, src, src, data_path):
@@ -99,9 +101,14 @@ def load_langpair_dataset(
         ))
 
         # ##################
+        
+        # know_dataset = data_utils.load_indexed_dataset(
+        #     know_prefix + know, know_dict, dataset_impl)
 
-        know_dataset = data_utils.load_indexed_dataset(
-            know_prefix + know, know_dict, dataset_impl)
+        # NOTE this is implicit and thus breaks translation
+        # task - should be own task...
+
+        know_dataset = data_utils.load_indexed_dataset(prefix + know, src_dict, dataset_impl)
 
         if know_dataset is not None:
             know_datasets.append(know_dataset)
@@ -157,19 +164,29 @@ def load_langpair_dataset(
     # print("know_dataset.sizes:", know_dataset.sizes)
     tgt_dataset_sizes = tgt_dataset.sizes if tgt_dataset is not None else None
 
-    print('ABOUT TO RETURN LanguagePairDataset')
-    print(know, len(know), len(know_dict))
+    # print('ABOUT TO RETURN LanguagePairDataset')
+    # print(know, len(know), len(know_dict))
+    # return LanguageTripleDataset(
+    #     src_dataset, src_dataset.sizes, src_dict,
+    #     tgt_dataset, tgt_dataset_sizes, tgt_dict,
+    #     know_dataset, know_dataset.sizes, know_dict,
+    #     left_pad_source=left_pad_source,
+    #     left_pad_target=left_pad_target,
+    #     align_dataset=align_dataset, eos=eos,
+    #     num_buckets=num_buckets,
+    #     shuffle=shuffle,
+    # )
+
     return LanguageTripleDataset(
         src_dataset, src_dataset.sizes, src_dict,
         tgt_dataset, tgt_dataset_sizes, tgt_dict,
-        know_dataset, know_dataset.sizes, know_dict,
+        know_dataset, know_dataset.sizes, src_dict,
         left_pad_source=left_pad_source,
         left_pad_target=left_pad_target,
         align_dataset=align_dataset, eos=eos,
         num_buckets=num_buckets,
         shuffle=shuffle,
     )
-
 
 @register_task('translation')
 class TranslationTask(FairseqTask):
@@ -246,11 +263,11 @@ class TranslationTask(FairseqTask):
                             help='print sample generations during validation')
         # fmt: on
 
-    def __init__(self, args, src_dict, tgt_dict, know_dict):
+    def __init__(self, args, src_dict, tgt_dict):
         super().__init__(args)
         self.src_dict = src_dict
         self.tgt_dict = tgt_dict
-        self.know_dict = know_dict
+        # self.know_dict = know_dict
 
     @classmethod
     def setup_task(cls, args, **kwargs):
@@ -283,15 +300,16 @@ class TranslationTask(FairseqTask):
         logger.info('[{}] dictionary: {} types'.format(args.source_lang, len(src_dict)))
         logger.info('[{}] dictionary: {} types'.format(args.target_lang, len(tgt_dict)))
 
-        if args.knowledge is not None:
-            know_dict = cls.load_dictionary(os.path.join(
-                paths[0], 'dict.{}.txt'.format(args.knowledge)))
-            logger.info('[{}] dictionary: {} types'.format(args.knowledge, len(know_dict)))
-            assert know_dict.pad() == tgt_dict.pad()
-            assert know_dict.eos() == tgt_dict.eos()
-            assert know_dict.unk() == tgt_dict.unk()
+        # if args.knowledge is not None:
+        #     know_dict = cls.load_dictionary(os.path.join(
+        #         paths[0], 'dict.{}.txt'.format(args.knowledge)))
+        #     logger.info('[{}] dictionary: {} types'.format(args.knowledge, len(know_dict)))
+        #     assert know_dict.pad() == tgt_dict.pad()
+        #     assert know_dict.eos() == tgt_dict.eos()
+        #     assert know_dict.unk() == tgt_dict.unk()
 
-        return cls(args, src_dict, tgt_dict, know_dict)
+        # return cls(args, src_dict, tgt_dict, know_dict)
+        return cls(args, src_dict, tgt_dict)
 
     def load_dataset(self, split, epoch=1, combine=False, **kwargs):
         """Load a given dataset split.
@@ -318,7 +336,7 @@ class TranslationTask(FairseqTask):
             data_path, split,
             src, self.src_dict,
             tgt, self.tgt_dict,
-            know, self.know_dict,
+            know, self.src_dict, # self.know_dict,
             combine=combine, dataset_impl=self.args.dataset_impl,
             upsample_primary=self.args.upsample_primary,
             left_pad_source=self.args.left_pad_source,
