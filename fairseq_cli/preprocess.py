@@ -50,7 +50,7 @@ def main(args):
     task = tasks.get_task(args.task)
 
     print(args)
-    import pdb;pdb.set_trace()
+    # import pdb;pdb.set_trace()
 
     def train_path(lang):
         return "{}{}".format(args.trainpref, ("." + lang) if lang else "")
@@ -156,21 +156,61 @@ def main(args):
             f'{args.destdir}/valid.{args.source_lang}-{args.target_lang}.{args.sent_ext}'
             )
 
-        senti_dict = None
+        # senti_dict = None
 
-    # assumed to be simple one int value per input text
-    elif args.sent_ext == 'sentiment':
-        senti_dict = task.build_normalisation_dictionary(
-            filenames=[train_path(args.sent_ext)], dict_path=dict_path(args.sent_ext), senti=True)
+    # # assumed to be simple one int value per input text
+    # elif args.sent_ext == 'sentiment':
+    #     senti_dict = task.build_normalisation_dictionary(
+    #         filenames=[train_path(args.sent_ext)], dict_path=dict_path(args.sent_ext), senti=True)
 
     if args.cate_ext:
-        cate_dict = task.build_normalisation_dictionary(
-            filenames=[train_path(args.cate_ext)], dict_path=dict_path(args.cate_ext), cate=True)
+        # cp test.domain to test.review-response_rg.domain
+        shutil.copy(
+            train_path(args.cate_ext),
+            f'{args.destdir}/train.{args.source_lang}-{args.target_lang}.{args.cate_ext}'
+            )
+        shutil.copy(
+            test_path(args.cate_ext),
+            f'{args.destdir}/test.{args.source_lang}-{args.target_lang}.{args.cate_ext}'
+            )
+        shutil.copy(
+            valid_path(args.cate_ext),
+            f'{args.destdir}/valid.{args.source_lang}-{args.target_lang}.{args.cate_ext}'
+            )
+        # cate_dict = task.build_normalisation_dictionary(
+        #     filenames=[train_path(args.cate_ext)], dict_path=dict_path(args.cate_ext), cate=True)
 
     if args.rate_ext:
-        rate_dict = task.build_normalisation_dictionary(
-            filenames=[train_path(args.rate_ext)], dict_path=dict_path(args.rate_ext), rate=True)
+        # cp test.rating to test.review-response_rg.rating
+        shutil.copy(
+            train_path(args.rate_ext),
+            f'{args.destdir}/train.{args.source_lang}-{args.target_lang}.{args.rate_ext}'
+            )
+        shutil.copy(
+            test_path(args.rate_ext),
+            f'{args.destdir}/test.{args.source_lang}-{args.target_lang}.{args.rate_ext}'
+            )
+        shutil.copy(
+            valid_path(args.rate_ext),
+            f'{args.destdir}/valid.{args.source_lang}-{args.target_lang}.{args.rate_ext}'
+            )
+        # rate_dict = task.build_normalisation_dictionary(
+        #     filenames=[train_path(args.rate_ext)], dict_path=dict_path(args.rate_ext), rate=True)
 
+    if args.len_ext:
+        # cp test.rating to test.review-response_rg.rating
+        shutil.copy(
+            train_path(args.len_ext),
+            f'{args.destdir}/train.{args.source_lang}-{args.target_lang}.{args.len_ext}'
+            )
+        shutil.copy(
+            test_path(args.len_ext),
+            f'{args.destdir}/test.{args.source_lang}-{args.target_lang}.{args.len_ext}'
+            )
+        shutil.copy(
+            valid_path(args.len_ext),
+            f'{args.destdir}/valid.{args.source_lang}-{args.target_lang}.{args.len_ext}'
+            )
 
     src_dict.save(dict_path(args.source_lang))
     if target and tgt_dict is not None:
@@ -358,14 +398,14 @@ def main(args):
     if target:
         make_all(args.target_lang, tgt_dict)
 
-    if args.sent_ext:
-        make_all(args.sent_ext, senti_dict)
+    # if args.sent_ext:
+    #     make_all(args.sent_ext, senti_dict)
 
-    if args.cate_ext:
-        make_all(args.cate_ext, cate_dict)
+    # if args.cate_ext:
+    #     make_all(args.cate_ext, cate_dict)
 
-    if args.rate_ext:
-        make_all(args.rate_ext, rate_dict)
+    # if args.rate_ext:
+    #     make_all(args.rate_ext, rate_dict)
 
 
     if args.align_suffix:

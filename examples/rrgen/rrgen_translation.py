@@ -58,15 +58,16 @@ def load_rrgen_dataset(
     combine, dataset_impl, upsample_primary,
     left_pad_source, left_pad_target, max_source_positions,
     max_target_positions, prepend_bos=False, load_alignments=False,
-    truncate_source=False, append_source_id=False,
+    truncate_source=False, truncate_target=False, append_source_id=False,
     num_buckets=0,
     shuffle=True,
     use_sentiment=None,
     use_category=None,
     use_rating=None,
-    ext_senti_dict=None,
-    ext_cate_dict=None,
-    ext_rate_dict=None,
+    use_length=None,
+    # ext_senti_dict=None,
+    # ext_cate_dict=None,
+    # ext_rate_dict=None,
 ):
 
     def split_exists(split, src, tgt, lang, data_path):
@@ -78,9 +79,9 @@ def load_rrgen_dataset(
     tgt_datasets = []
 
     # A-component data
-    senti_datasets = []
-    cate_datasets = []
-    rate_datasets = []
+    # senti_datasets = []
+    # cate_datasets = []
+    # rate_datasets = []
 
     # import pdb
     # pdb.set_trace()
@@ -116,7 +117,23 @@ def load_rrgen_dataset(
 
         tgt_dataset = data_utils.load_indexed_dataset(
             prefix + tgt, tgt_dict, dataset_impl)
+
+        # breakpoint()
+
         if tgt_dataset is not None:
+            # NOTE using the argument
+            # --skip-invalid-size-inputs-valid-test results
+            # in differing test sets when comparing
+            # models if trained with different
+            # --max-source-positions and
+            # --max-source-positions arguments. 
+            # As an alternative, we can just
+            # truncate all source and target datasets to
+            # --max-source-positions and --max-target-positions
+            
+            if truncate_target:
+                tgt_dataset = TruncateDataset(tgt_dataset, max_target_positions)
+
             tgt_datasets.append(tgt_dataset)
 
         logger.info('{} {} {}-{} {} examples'.format(
@@ -130,70 +147,87 @@ def load_rrgen_dataset(
         # pdb.set_trace()
 
         if use_sentiment:
+            # alpha-systems sentiment annotations
+            senti_dataset = np.loadtxt(prefix + use_sentiment)
 
-            if use_sentiment == 'alpha_sentiment' and dataset_impl == 'raw':
+            # if use_sentiment == 'alpha_sentiment' and dataset_impl == 'raw':
                 
-                if not split_exists(split_k, src, tgt, use_sentiment, data_path) and not split_exists(split_k, tgt, src, use_sentiment, data_path):
-                    raise FileNotFoundError('Ext {} dataset not found: {} ({})'.format(use_sentiment, split, data_path))
+            #     if not split_exists(split_k, src, tgt, use_sentiment, data_path) and not split_exists(split_k, tgt, src, use_sentiment, data_path):
+            #         raise FileNotFoundError('Ext {} dataset not found: {} ({})'.format(use_sentiment, split, data_path))
                 
-                prefix = os.path.join(
-                    data_path, '{}.{}-{}.'.format(split_k, src, tgt))
+            #     prefix = os.path.join(
+            #         data_path, '{}.{}-{}.'.format(split_k, src, tgt))
 
-                # alpha-systems sentiment annotations
-                senti_dataset = np.loadtxt(prefix + use_sentiment)
+                # # alpha-systems sentiment annotations
+                # senti_dataset = np.loadtxt(prefix + use_sentiment)
 
-            elif use_sentiment == 'sentiment':
-                if not split_exists(split_k, src, tgt, use_sentiment, data_path) and not split_exists(split_k, tgt, src, use_sentiment, data_path):
-                    raise FileNotFoundError(
-                        'Ext {} dataset not found: {} ({})'.format(use_sentiment, split, data_path))
-                prefix = os.path.join(
-                    data_path, '{}.{}-{}.'.format(split_k, src, tgt))
+            # elif use_sentiment == 'sentiment':
+            #     if not split_exists(split_k, src, tgt, use_sentiment, data_path) and not split_exists(split_k, tgt, src, use_sentiment, data_path):
+            #         raise FileNotFoundError(
+            #             'Ext {} dataset not found: {} ({})'.format(use_sentiment, split, data_path))
+            #     prefix = os.path.join(
+            #         data_path, '{}.{}-{}.'.format(split_k, src, tgt))
                 
-                if dataset_impl != 'raw': # hack for handling both 'raw' and binarized datasets
-                    senti_dataset = data_utils.load_indexed_dataset(
-                        prefix + use_sentiment, ext_senti_dict, dataset_impl)
-                else:
-                    senti_dataset = data_utils.load_and_map_simple_dataset(
-                        prefix + use_sentiment, ext_senti_dict, dataset_impl
-                    )
+            #     if dataset_impl != 'raw': # hack for handling both 'raw' and binarized datasets
+            #         senti_dataset = data_utils.load_indexed_dataset(
+            #             prefix + use_sentiment, ext_senti_dict, dataset_impl)
+            #     else:
+            #         senti_dataset = data_utils.load_and_map_simple_dataset(
+            #             prefix + use_sentiment, ext_senti_dict, dataset_impl
+            #         )
                 
         else:
             senti_dataset = None
 
+        # breakpoint()
+
         if use_category:
-            if not split_exists(split_k, src, tgt, use_category, data_path) and not split_exists(split_k, tgt, src, use_category, data_path):
-                raise FileNotFoundError(
-                    'Ext {} dataset not found: {} ({})'.format(use_category, split, data_path))
-            prefix = os.path.join(
-                data_path, '{}.{}-{}.'.format(split_k, src, tgt))
-            if dataset_impl != 'raw':
-                cate_dataset = data_utils.load_indexed_dataset(
-                    prefix + use_category, ext_cate_dict, dataset_impl)
-            else:
-                cate_dataset = data_utils.load_and_map_simple_dataset(
-                    prefix + use_category, ext_cate_dict, dataset_impl
-                )
+            # numericalised categorical values for
+            # domain/category [0, 1]
+            cate_dataset = np.loadtxt(prefix + use_category).reshape(-1,1)
+            
+            # if not split_exists(split_k, src, tgt, use_category, data_path) and not split_exists(split_k, tgt, src, use_category, data_path):
+            #     raise FileNotFoundError(
+            #         'Ext {} dataset not found: {} ({})'.format(use_category, split, data_path))
+            # prefix = os.path.join(
+            #     data_path, '{}.{}-{}.'.format(split_k, src, tgt))
+            # if dataset_impl != 'raw':
+            #     cate_dataset = data_utils.load_indexed_dataset(
+            #         prefix + use_category, ext_cate_dict, dataset_impl)
+            # else:
+            #     cate_dataset = data_utils.load_and_map_simple_dataset(
+            #         prefix + use_category, ext_cate_dict, dataset_impl
+            #     )
         else:
             cate_dataset = None
 
         if use_rating:
-            if not split_exists(split_k, src, tgt, use_rating, data_path) and not split_exists(split_k, tgt, src, use_rating, data_path):
-                raise FileNotFoundError(
-                    'Ext {} dataset not found: {} ({})'.format(use_rating, split, data_path))
-            prefix = os.path.join(
-                data_path, '{}.{}-{}.'.format(split_k, src, tgt))
-            if dataset_impl != 'raw':
-                rate_dataset = data_utils.load_indexed_dataset(
-                    prefix + use_rating, ext_rate_dict, dataset_impl)
-            else:
-                rate_dataset = data_utils.load_and_map_simple_dataset(
-                    prefix + use_rating, ext_rate_dict, dataset_impl
-                )
+            # normalised categorical rating values [0, 1]
+            rate_dataset = np.loadtxt(prefix + use_rating).reshape(-1,1)
+            # if not split_exists(split_k, src, tgt, use_rating, data_path) and not split_exists(split_k, tgt, src, use_rating, data_path):
+            #     raise FileNotFoundError(
+            #         'Ext {} dataset not found: {} ({})'.format(use_rating, split, data_path))
+            # prefix = os.path.join(
+            #     data_path, '{}.{}-{}.'.format(split_k, src, tgt))
+            # if dataset_impl != 'raw':
+            #     rate_dataset = data_utils.load_indexed_dataset(
+            #         prefix + use_rating, ext_rate_dict, dataset_impl)
+            # else:
+            #     rate_dataset = data_utils.load_and_map_simple_dataset(
+            #         prefix + use_rating, ext_rate_dict, dataset_impl
+            #     )
         else:
             rate_dataset = None
 
+        if use_length:
+            # normalised categorical src length values [0, 1]
+            length_dataset = np.loadtxt(prefix + use_length).reshape(-1,1)
+        else:
+            length_dataset = None
+
         if not combine:
             break
+
 
     assert len(src_datasets) == len(tgt_datasets) or len(tgt_datasets) == 0
 
@@ -241,9 +275,10 @@ def load_rrgen_dataset(
         ext_senti=senti_dataset,
         ext_cate=cate_dataset,
         ext_rate=rate_dataset,
-        ext_senti_dict=ext_senti_dict,
-        ext_cate_dict=ext_cate_dict,
-        ext_rate_dict=ext_rate_dict,
+        ext_len=length_dataset,
+        # ext_senti_dict=ext_senti_dict,
+        # ext_cate_dict=ext_cate_dict,
+        # ext_rate_dict=ext_rate_dict,
         left_pad_source=left_pad_source,
         left_pad_target=left_pad_target,
         align_dataset=align_dataset, eos=eos,
@@ -299,6 +334,8 @@ class RRGenTranslationTask(LegacyFairseqTask):
                             help='amount to upsample primary dataset')
         parser.add_argument('--truncate-source', action='store_true', default=False,
                             help='truncate source to max-source-positions')
+        parser.add_argument('--truncate-target', action='store_true', default=False,
+                            help='truncate target to max-target-positions') # see note above
         parser.add_argument('--num-batch-buckets', default=0, type=int, metavar='N',
                             help='if >0, then bucket source and target lengths into N '
                                  'buckets and pad accordingly; this is useful on TPUs '
@@ -348,14 +385,15 @@ class RRGenTranslationTask(LegacyFairseqTask):
         parser.add_argument('--use-length', default=None,
                             help='incorporate length attribute for input review')
 
-    def __init__(self, args, src_dict, tgt_dict, ext_senti_dict, ext_cate_dict, ext_rate_dict):
+    # def __init__(self, args, src_dict, tgt_dict, ext_senti_dict, ext_cate_dict, ext_rate_dict):
+    def __init__(self, args, src_dict, tgt_dict):
         super().__init__(args)
         self.src_dict = src_dict
         self.tgt_dict = tgt_dict
         # A-component attribute dictionaries
-        self.ext_senti_dict = ext_senti_dict
-        self.ext_cate_dict = ext_cate_dict
-        self.ext_rate_dict = ext_rate_dict
+        # self.ext_senti_dict = ext_senti_dict
+        # self.ext_cate_dict = ext_cate_dict
+        # self.ext_rate_dict = ext_rate_dict
 
     @classmethod
     def setup_task(cls, args, **kwargs):
@@ -390,37 +428,38 @@ class RRGenTranslationTask(LegacyFairseqTask):
         logger.info('[{}] dictionary: {} types'.format(
             args.target_lang, len(tgt_dict)))
 
-        if args.use_sentiment is not None:
+        # if args.use_sentiment is not None:
 
-            # account for single sentiment value input
-            if args.use_sentiment == 'sentiment':
-                ext_senti_dict = cls.load_normalisation_dictionary(os.path.join(
-                    paths[0], 'dict.{}.txt'.format(args.use_sentiment)))
-                logger.info('[{}] dictionary: {} types'.format(args.use_sentiment,
-                                                            len(ext_senti_dict)))
-            else:
-                ext_senti_dict = None
+        #     # account for single sentiment value input
+        #     if args.use_sentiment == 'sentiment':
+        #         ext_senti_dict = cls.load_normalisation_dictionary(os.path.join(
+        #             paths[0], 'dict.{}.txt'.format(args.use_sentiment)))
+        #         logger.info('[{}] dictionary: {} types'.format(args.use_sentiment,
+        #                                                     len(ext_senti_dict)))
+        #     else:
+        #         ext_senti_dict = None
 
-        else:
-            ext_senti_dict = None
+        # else:
+        #     ext_senti_dict = None
 
-        if args.use_category is not None:
-            ext_cate_dict = cls.load_normalisation_dictionary(os.path.join(
-                paths[0], 'dict.{}.txt'.format(args.use_category)))
-            logger.info('[{}] dictionary: {} types'.format(args.use_category,
-                                                           len(ext_cate_dict)))
-        else:
-            ext_cate_dict = None
+        # if args.use_category is not None:
+        #     ext_cate_dict = cls.load_normalisation_dictionary(os.path.join(
+        #         paths[0], 'dict.{}.txt'.format(args.use_category)))
+        #     logger.info('[{}] dictionary: {} types'.format(args.use_category,
+        #                                                    len(ext_cate_dict)))
+        # else:
+        #     ext_cate_dict = None
 
-        if args.use_rating is not None:
-            ext_rate_dict = cls.load_normalisation_dictionary(os.path.join(
-                paths[0], 'dict.{}.txt'.format(args.use_rating)))
-            logger.info('[{}] dictionary: {} types'.format(args.use_rating,
-                                                           len(ext_rate_dict)))
-        else:
-            ext_rate_dict = None
+        # if args.use_rating is not None:
+        #     ext_rate_dict = cls.load_normalisation_dictionary(os.path.join(
+        #         paths[0], 'dict.{}.txt'.format(args.use_rating)))
+        #     logger.info('[{}] dictionary: {} types'.format(args.use_rating,
+        #                                                    len(ext_rate_dict)))
+        # else:
+        #     ext_rate_dict = None
 
-        return cls(args, src_dict, tgt_dict, ext_senti_dict, ext_cate_dict, ext_rate_dict)
+        return cls(args, src_dict, tgt_dict)
+        # return cls(args, src_dict, tgt_dict, ext_senti_dict, ext_cate_dict, ext_rate_dict)
 
     @staticmethod
     def build_normalisation_dictionary(filenames: List, dict_path: str, senti: bool = False, cate: bool = False, rate: bool = False):
@@ -544,15 +583,18 @@ class RRGenTranslationTask(LegacyFairseqTask):
             max_source_positions=self.args.max_source_positions,
             max_target_positions=self.args.max_target_positions,
             load_alignments=self.args.load_alignments,
-            truncate_source=self.args.truncate_source,
+            truncate_source = self.args.truncate_source,
+            truncate_target = self.args.truncate_target,
             num_buckets=self.args.num_batch_buckets,
             shuffle=(split != 'test'),
-            ext_senti_dict=self.ext_senti_dict,
-            ext_cate_dict=self.ext_cate_dict,
-            ext_rate_dict=self.ext_rate_dict,
+            # ext_senti_dict=self.ext_senti_dict,
+            # ext_cate_dict=self.ext_cate_dict,
+            # ext_rate_dict=self.ext_rate_dict,
             use_sentiment=self.args.use_sentiment,
             use_category=self.args.use_category,
-            use_rating=self.args.use_rating
+            use_rating = self.args.use_rating,
+            use_length = self.args.use_length,
+            
         )
 
     def build_dataset_for_inference(self, src_tokens, src_lengths):

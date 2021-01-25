@@ -297,6 +297,8 @@ def add_preprocess_args(parser):
                        help="file extension for category annotations")
     group.add_argument("--rate-ext", metavar="RATE", default=None, type=str,
                        help="file extension for review rating annotations")
+    group.add_argument("--len-ext", metavar="SRCLEN", default=None, type=str,
+                       help="file extension for categorical review text length annotations")
     
     return parser
 

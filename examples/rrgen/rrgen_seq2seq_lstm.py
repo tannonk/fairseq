@@ -115,6 +115,9 @@ class RRGenLSTMModel(FairseqEncoderDecoderModel):
             embed_tokens = Embedding(num_embeddings, embed_dim, padding_idx)
             embed_dict = utils.parse_embedding(embed_path)
             utils.print_embed_overlap(embed_dict, dictionary)
+            # breakpoint()  # can inspect OOV words here
+            # s = set(dictionary.symbols)-set(embed_dict.keys())
+            # p s
             return utils.load_embedding(embed_dict, dictionary, embed_tokens)
 
         if args.encoder_embed_path:
@@ -200,6 +203,7 @@ class RRGenLSTMModel(FairseqEncoderDecoderModel):
             use_senti=args.use_sentiment,
             use_cate=args.use_category,
             use_rate=args.use_rating,
+            use_len=args.use_length,
             tie_ext_features=args.tie_ext_features
         )
 
@@ -213,12 +217,12 @@ class RRGenLSTMModel(FairseqEncoderDecoderModel):
         ext_senti: Optional[Tensor] = None,
         ext_cate: Optional[Tensor] = None,
         ext_rate: Optional[Tensor] = None,
+        ext_len: Optional[Tensor] = None,
         target: Optional[Tensor] = None,
         incremental_state: Optional[Dict[str, Dict[str, Optional[Tensor]]]] = None,
     ):
 
-        # import pdb
-        # pdb.set_trace()
+        # breakpoint()
 
         encoder_out = self.encoder(src_tokens, src_lengths=src_lengths)
         decoder_out = self.decoder(
@@ -228,6 +232,7 @@ class RRGenLSTMModel(FairseqEncoderDecoderModel):
             ext_senti=ext_senti,
             ext_cate=ext_cate,
             ext_rate=ext_rate,
+            ext_len=ext_len,
         )
         return decoder_out
 
@@ -280,8 +285,8 @@ class RRGenLSTMEncoder(FairseqEncoder):
         enforce_sorted: bool = True,
         ext_senti: Optional[Tensor] = None,
         ext_cate: Optional[Tensor] = None,
-        ext_rate: Optional[Tensor] = None
-
+        ext_rate: Optional[Tensor] = None,
+        ext_len: Optional[Tensor] = None,
     ):
         """
         Args:
@@ -466,7 +471,7 @@ class RRGenLSTMDecoder(FairseqIncrementalDecoder):
                 self.tie_ext_feature_size += 1
             if self.use_cate:
                 self.tie_ext_feature_size += 1
-            if self.use_len: #TODO incorporate length attributes
+            if self.use_len:
                 self.tie_ext_feature_size += 1
 
         # from original -> handles projections from
@@ -520,15 +525,17 @@ class RRGenLSTMDecoder(FairseqIncrementalDecoder):
         ext_senti: Optional[Tensor] = None,
         ext_cate: Optional[Tensor] = None,
         ext_rate: Optional[Tensor] = None,
+        ext_len: Optional[Tensor] = None,
     ):
         """
         ext_senti: list of tensor values for input reviews
         ext_cate: list of tensor values for input reviews
         ext_rate: list of tensor values for input reviews
+        ext_len: list of tensor values for input reviews
         """
 
         x, attn_scores = self.extract_features(
-            prev_output_tokens, encoder_out, incremental_state, ext_senti, ext_cate, ext_rate
+            prev_output_tokens, encoder_out, incremental_state, ext_senti, ext_cate, ext_rate, ext_len
         )
         return self.output_layer(x), attn_scores
 
@@ -541,6 +548,7 @@ class RRGenLSTMDecoder(FairseqIncrementalDecoder):
         ext_senti: Optional[Tensor] = None,
         ext_cate: Optional[Tensor] = None,
         ext_rate: Optional[Tensor] = None,
+        ext_len: Optional[Tensor] = None,
     ):
         """
 
@@ -589,18 +597,18 @@ class RRGenLSTMDecoder(FairseqIncrementalDecoder):
         elif encoder_out is not None:
             # setup recurrent cells
 
-            if self.use_cate and ext_cate is not None:
-                encoder_hiddens, encoder_cells = self.extend_hidden_state(
-                    encoder_hiddens, encoder_cells, ext_cate)
             if self.use_senti and ext_senti is not None:
                 encoder_hiddens, encoder_cells = self.extend_hidden_state(
                     encoder_hiddens, encoder_cells, ext_senti)
+            if self.use_cate and ext_cate is not None:
+                encoder_hiddens, encoder_cells = self.extend_hidden_state(
+                    encoder_hiddens, encoder_cells, ext_cate)
             if self.use_rate and ext_rate is not None:
                 encoder_hiddens, encoder_cells = self.extend_hidden_state(
                     encoder_hiddens, encoder_cells, ext_rate)
-
-            # TODO: concat SRC LENGTH features into decoder
-            # as well
+            if self.use_len and ext_len is not None:
+                encoder_hiddens, encoder_cells = self.extend_hidden_state(
+                    encoder_hiddens, encoder_cells, ext_len)
 
             prev_hiddens = [encoder_hiddens[i] for i in range(self.num_layers)]
             prev_cells = [encoder_cells[i] for i in range(self.num_layers)]

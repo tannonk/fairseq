@@ -147,7 +147,8 @@ class SequenceGenerator(nn.Module):
                     "prev_output_tokens",
                     "ext_senti",
                     "ext_cate",
-                    "ext_rate"
+                    "ext_rate",
+                    "ext_len",
                 ]
             }
 
@@ -222,6 +223,7 @@ class SequenceGenerator(nn.Module):
         ext_senti = net_input.get("ext_senti")
         ext_cate = net_input.get("ext_cate")
         ext_rate = net_input.get("ext_rate")
+        ext_len = net_input.get("ext_len")
 
         # length of the source text being the character length except EndOfSentence and pad
         src_lengths = (
@@ -284,6 +286,8 @@ class SequenceGenerator(nn.Module):
             ext_cate = self.model.reorder_ext_attributes(ext_cate, new_order)
         if ext_rate is not None:
             ext_rate = self.model.reorder_ext_attributes(ext_rate, new_order)
+        if ext_len is not None:
+            ext_len = self.model.reorder_ext_attributes(ext_len, new_order)
 
         # initialize buffers
         scores = (
@@ -362,6 +366,7 @@ class SequenceGenerator(nn.Module):
                 ext_senti=ext_senti,
                 ext_cate=ext_cate,
                 ext_rate=ext_rate,
+                ext_len=ext_len,
             )
 
             if self.lm_model is not None:
@@ -890,6 +895,7 @@ class EnsembleModel(nn.Module):
         ext_senti: Optional[Tensor] = None,
         ext_cate: Optional[Tensor] = None,
         ext_rate: Optional[Tensor] = None,
+        ext_len: Optional[Tensor] = None,
     ):
 
         # import pdb
@@ -911,6 +917,7 @@ class EnsembleModel(nn.Module):
                     ext_senti=ext_senti,
                     ext_cate=ext_cate,
                     ext_rate=ext_rate,
+                    ext_len=ext_len
                 )
 
             else:
@@ -920,6 +927,7 @@ class EnsembleModel(nn.Module):
                     ext_senti=ext_senti,
                     ext_cate=ext_cate,
                     ext_rate=ext_rate,
+                    ext_len=ext_len
                 )
                 
             attn: Optional[Tensor] = None

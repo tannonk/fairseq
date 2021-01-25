@@ -135,6 +135,12 @@ def collate(
     except:
         ext_rate = None
 
+    try:
+        ext_len = torch.stack([s['ext_len'] for s in samples])
+        # ext_rate = torch.FloatTensor([s['ext_rate'] for s in samples])
+    except:
+        ext_len = None
+
     batch = {
         'id': id,
         'nsentences': len(samples),
@@ -145,10 +151,8 @@ def collate(
             'ext_senti': ext_senti,  # sentiment scores for samples
             'ext_cate': ext_cate,  # category value for samples
             'ext_rate': ext_rate,  # review rating scores for samples
+            'ext_len': ext_len,  # review rating scores for samples
         },
-        # 'ext_senti': ext_senti,  # sentiment scores for samples
-        # 'ext_cate': ext_cate,  # category value for samples
-        # 'ext_rate': ext_rate,  # review rating scores for samples
         'target': target,
     }
 
@@ -201,6 +205,7 @@ class RRGenDataset(FairseqDataset):
         ext_senti: 
         ext_cate: 
         ext_rate:
+        ext_len:
 
         left_pad_source (bool, optional): pad source tensors on the left side
             (default: True).
@@ -231,9 +236,10 @@ class RRGenDataset(FairseqDataset):
     def __init__(
         self, src, src_sizes, src_dict,
         tgt=None, tgt_sizes=None, tgt_dict=None,
-        ext_senti=None, ext_senti_dict=None,
-        ext_cate=None, ext_cate_dict=None,
-        ext_rate=None, ext_rate_dict=None,
+        ext_senti=None, #ext_senti_dict=None,
+        ext_cate=None, #ext_cate_dict=None,
+        ext_rate=None, #ext_rate_dict=None,
+        ext_len=None,
         left_pad_source=True, left_pad_target=False,
         shuffle=True, input_feeding=True,
         remove_eos_from_source=False, append_eos_to_target=False,
@@ -258,11 +264,12 @@ class RRGenDataset(FairseqDataset):
         self.tgt_dict = tgt_dict
         # --------------------------
         self.ext_senti = ext_senti
-        self.ext_senti_dict = ext_senti_dict
+        # self.ext_senti_dict = ext_senti_dict
         self.ext_cate = ext_cate
-        self.ext_cate_dict = ext_cate_dict
+        # self.ext_cate_dict = ext_cate_dict
         self.ext_rate = ext_rate
-        self.ext_rate_dict = ext_rate_dict
+        # self.ext_rate_dict = ext_rate_dict
+        self.ext_len = ext_len
         # --------------------------
         self.left_pad_source = left_pad_source
         self.left_pad_target = left_pad_target
@@ -354,31 +361,34 @@ class RRGenDataset(FairseqDataset):
         if isinstance(self.ext_senti, np.ndarray):
             ext_senti_item = torch.from_numpy(np.float32(self.ext_senti[index]))
 
-        # NOTE ext attribute features are torch.Tensors, if loaded
-        # using binarized data-impl (e.g. mmap, lazy, etc).
-        # These need to be 'encoded' using the normalised
-        # mapping dictionaries        
-        elif self.ext_senti and self.ext_senti_dict:
-            # binarized datasets use Tensors and require
-            # mapping to normalised input value in
-            # corresponding dictionary
-            if isinstance(self.ext_senti[index], torch.Tensor):
-                ext_senti_item = torch.Tensor(
-                    [self.ext_senti_dict[self.ext_senti[index].item()]])
+        # # NOTE ext attribute features are torch.Tensors, if loaded
+        # # using binarized data-impl (e.g. mmap, lazy, etc).
+        # # These need to be 'encoded' using the normalised
+        # # mapping dictionaries        
+        # elif self.ext_senti and self.ext_senti_dict:
+        #     # binarized datasets use Tensors and require
+        #     # mapping to normalised input value in
+        #     # corresponding dictionary
+        #     if isinstance(self.ext_senti[index], torch.Tensor):
+        #         ext_senti_item = torch.Tensor(
+        #             [self.ext_senti_dict[self.ext_senti[index].item()]])
 
-            elif isinstance(self.ext_senti[index], float):
-                # no lookup required just convert to tensor
-                # NOTE: mapping to normalised input value is done in data_utils.load_and_map_simple_dataset
-                ext_senti_item = torch.Tensor([self.ext_senti[index]])
+        #     elif isinstance(self.ext_senti[index], float):
+        #         # no lookup required just convert to tensor
+        #         # NOTE: mapping to normalised input value is done in data_utils.load_and_map_simple_dataset
+        #         ext_senti_item = torch.Tensor([self.ext_senti[index]])
         else:
             ext_senti_item = None
 
-        if self.ext_cate and self.ext_cate_dict:
-            if isinstance(self.ext_cate[index], torch.Tensor):
-                ext_cate_item = torch.Tensor(
-                    [self.ext_cate_dict[self.ext_cate[index].item()]])
-            elif isinstance(self.ext_cate[index], float):
-                ext_cate_item = torch.Tensor([self.ext_cate[index]])
+        if isinstance(self.ext_cate, np.ndarray):
+            ext_cate_item = torch.from_numpy(np.float32(self.ext_cate[index]))
+
+        # if self.ext_cate and self.ext_cate_dict:
+        #     if isinstance(self.ext_cate[index], torch.Tensor):
+        #         ext_cate_item = torch.Tensor(
+        #             [self.ext_cate_dict[self.ext_cate[index].item()]])
+        #     elif isinstance(self.ext_cate[index], float):
+        #         ext_cate_item = torch.Tensor([self.ext_cate[index]])
 
             # try:
             #     ext_cate_item = torch.Tensor(
@@ -389,12 +399,15 @@ class RRGenDataset(FairseqDataset):
         else:
             ext_cate_item = None
 
-        if self.ext_rate and self.ext_rate_dict:
-            if isinstance(self.ext_rate[index], torch.Tensor):
-                ext_rate_item = torch.Tensor(
-                    [self.ext_rate_dict[self.ext_rate[index].item()]])
-            elif isinstance(self.ext_rate[index], float):
-                ext_rate_item = torch.Tensor([self.ext_rate[index]])
+        if isinstance(self.ext_rate, np.ndarray):
+            ext_rate_item = torch.from_numpy(np.float32(self.ext_rate[index]))
+
+        # if self.ext_rate and self.ext_rate_dict:
+        #     if isinstance(self.ext_rate[index], torch.Tensor):
+        #         ext_rate_item = torch.Tensor(
+        #             [self.ext_rate_dict[self.ext_rate[index].item()]])
+        #     elif isinstance(self.ext_rate[index], float):
+        #         ext_rate_item = torch.Tensor([self.ext_rate[index]])
             # try:
             #     ext_rate_item = torch.Tensor(
             #         [self.ext_rate_dict[self.ext_rate[index].item()]])
@@ -403,6 +416,11 @@ class RRGenDataset(FairseqDataset):
             #         [self.ext_rate_dict[str(self.ext_rate[index].item())]])
         else:
             ext_rate_item = None
+
+        if isinstance(self.ext_len, np.ndarray):
+            ext_len_item = torch.from_numpy(np.float32(self.ext_len[index]))
+        else:
+            ext_len_item = None
 
         # if self.ext_cate and self.ext_cate_dict:
         #     ext_cate_item = torch.Tensor(
@@ -430,10 +448,10 @@ class RRGenDataset(FairseqDataset):
             'ext_senti': ext_senti_item,
             'ext_cate': ext_cate_item,
             'ext_rate': ext_rate_item,
+            'ext_len': ext_len_item,
         }
 
-        # import pdb
-        # pdb.set_trace()
+        # breakpoint()
 
         if self.align_dataset is not None:
             example['alignment'] = self.align_dataset[index]
