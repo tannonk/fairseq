@@ -42,14 +42,19 @@ from .rrgen_dataset import RRGenDataset
 from fairseq.file_io import PathManager
 from collections import Counter
 from typing import List, Set, Dict, Tuple, Optional
-from sklearn.preprocessing import MinMaxScaler, LabelEncoder
-
+from sklearn.preprocessing import MinMaxScaler, LabelEncoder, maxabs_scale, normalize
 
 EVAL_BLEU_ORDER = 4
 
-
 logger = logging.getLogger(__name__)
 
+def normalise_sentiment_vector_values(x):
+    original_shape = x.shape
+    return normalize(x.reshape(-1,5), norm='l2', axis=0).reshape(original_shape)
+
+def maxabs_scale_sentiment_vector_values(x):
+    original_shape = x.shape
+    return maxabs_scale(x.reshape(-1,5), axis=0).reshape(original_shape)
 
 def load_rrgen_dataset(
     data_path, split,
@@ -65,6 +70,7 @@ def load_rrgen_dataset(
     use_category=None,
     use_rating=None,
     use_length=None,
+    norm_senti=None,
     # ext_senti_dict=None,
     # ext_cate_dict=None,
     # ext_rate_dict=None,
@@ -100,8 +106,19 @@ def load_rrgen_dataset(
             if k > 0:
                 break
             else:
-                raise FileNotFoundError(
-                    'Dataset not found: {} ({})'.format(split, data_path))
+                # ADDED HACK TO HELP REDIRECT PATH TO CUSTOM
+                # A TEST SET, e.g. RE_TEST (re:spondelligent
+                # test data subset).
+                # expects a file name like `test.review`
+                # with the relative path from the src and
+                # tgt dictionaries. 
+                try:
+                    prefix = os.path.join(
+                        data_path, '{}.'.format(split_k))
+                    logger.info(f'[!] warning: using data from {prefix}*')
+                except:
+                    raise FileNotFoundError(
+                        'Dataset not found: {} ({})'.format(split, data_path))
 
         src_dataset = data_utils.load_indexed_dataset(
             prefix + src, src_dict, dataset_impl)
@@ -143,13 +160,21 @@ def load_rrgen_dataset(
         # -----------------
         # load A-Components
         # -----------------
-        # import pdb
-        # pdb.set_trace()
+        # breakpoint()
 
         if use_sentiment:
             # alpha-systems sentiment annotations
             senti_dataset = np.loadtxt(prefix + use_sentiment)
 
+            logger.info(f'loaded {len(senti_dataset)} examples from {prefix + use_sentiment}')
+
+            if norm_senti:
+                if norm_senti == 'norm':
+                    senti_dataset = np.array([normalise_sentiment_vector_values(x) for x in senti_dataset])
+                elif norm_senti == 'maxabs':
+                    senti_dataset = np.array([maxabs_scale_sentiment_vector_values(x) for x in senti_dataset])
+                
+                logger.info(f'sentiment vectors normalised with {norm_senti}')
             # if use_sentiment == 'alpha_sentiment' and dataset_impl == 'raw':
                 
             #     if not split_exists(split_k, src, tgt, use_sentiment, data_path) and not split_exists(split_k, tgt, src, use_sentiment, data_path):
@@ -185,7 +210,8 @@ def load_rrgen_dataset(
             # numericalised categorical values for
             # domain/category [0, 1]
             cate_dataset = np.loadtxt(prefix + use_category).reshape(-1,1)
-            
+            logger.info(f'loaded {len(cate_dataset)} examples from {prefix + use_category}')
+
             # if not split_exists(split_k, src, tgt, use_category, data_path) and not split_exists(split_k, tgt, src, use_category, data_path):
             #     raise FileNotFoundError(
             #         'Ext {} dataset not found: {} ({})'.format(use_category, split, data_path))
@@ -204,6 +230,7 @@ def load_rrgen_dataset(
         if use_rating:
             # normalised categorical rating values [0, 1]
             rate_dataset = np.loadtxt(prefix + use_rating).reshape(-1,1)
+            logger.info(f'loaded {len(rate_dataset)} examples from {prefix + use_rating}')
             # if not split_exists(split_k, src, tgt, use_rating, data_path) and not split_exists(split_k, tgt, src, use_rating, data_path):
             #     raise FileNotFoundError(
             #         'Ext {} dataset not found: {} ({})'.format(use_rating, split, data_path))
@@ -222,6 +249,7 @@ def load_rrgen_dataset(
         if use_length:
             # normalised categorical src length values [0, 1]
             length_dataset = np.loadtxt(prefix + use_length).reshape(-1,1)
+            logger.info(f'loaded {len(length_dataset)} examples from {prefix + use_length}')
         else:
             length_dataset = None
 
@@ -384,6 +412,8 @@ class RRGenTranslationTask(LegacyFairseqTask):
                             help='incorporate rating annotations for input review')
         parser.add_argument('--use-length', default=None,
                             help='incorporate length attribute for input review')
+        parser.add_argument('--norm-senti', default=None,
+                            help='name of normalisation technique to apply to alpha sentiment vectors, e.g. "norm" or "maxabs"')
 
     # def __init__(self, args, src_dict, tgt_dict, ext_senti_dict, ext_cate_dict, ext_rate_dict):
     def __init__(self, args, src_dict, tgt_dict):
@@ -594,7 +624,7 @@ class RRGenTranslationTask(LegacyFairseqTask):
             use_category=self.args.use_category,
             use_rating = self.args.use_rating,
             use_length = self.args.use_length,
-            
+            norm_senti = self.args.norm_senti,            
         )
 
     def build_dataset_for_inference(self, src_tokens, src_lengths):

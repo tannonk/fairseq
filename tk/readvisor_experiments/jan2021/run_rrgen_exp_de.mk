@@ -164,9 +164,10 @@ LG3_SG5_UP5_PREP: /srv/scratch2/kew/fairseq_materials/rrgen_012021/de/lg3_sg5_up
 	--workers 20 \
 	--wandb-project readvisor
 
+# last run: Jan 27
 LG3_SG5_UP5_TRAIN_LSTM_SRCL: /srv/scratch2/kew/fairseq_materials/rrgen_012021/de/lg3_sg5_up5
 	mkdir -p $</lstm_srcl_bpemb200_hd200
-	CUDA_VISIBLE_DEVICES=1 \
+	CUDA_VISIBLE_DEVICES=2 \
 	nohup \
 	fairseq-train \
 	$</prep \
@@ -178,14 +179,14 @@ LG3_SG5_UP5_TRAIN_LSTM_SRCL: /srv/scratch2/kew/fairseq_materials/rrgen_012021/de
 	--dataset-impl raw \
 	--max-epoch 20 \
 	--max-tokens 20480 --update-freq 1 \
-	--lr 0.0005 --optimizer adam --clip-norm 0.5 \
+	--lr 0.001 --optimizer adam --clip-norm 1.0 \
 	--encoder-embed-path /srv/scratch2/kew/embeddings/data/de/de.wiki.bpe.vs10000.d200.w2v.txt \
 	--decoder-embed-path /srv/scratch2/kew/embeddings/data/de/de.wiki.bpe.vs10000.d200.w2v.txt \
 	--encoder-embed-dim 200 --decoder-embed-dim 200 --decoder-out-embed-dim 200 \
 	--share-all-embeddings \
 	--encoder-hidden-size 200 \
 	--decoder-hidden-size 200 \
-	--use-sentiment alpha_sentiment \
+	--use-sentiment alpha_sentiment --norm-senti norm \
 	--use-category domain \
 	--use-rating rating \
 	--use-length review_length \
@@ -240,6 +241,30 @@ LG3_SG5_UP5_TRAIN_LSTM_RCL: /srv/scratch2/kew/fairseq_materials/rrgen_012021/de/
 	--use-rating rating \
 	--wandb-project readvisor \
 	--save-dir $</lstm_rcl_bpemb200_hd200/checkpoints/ --save-interval 4 >| $</lstm_rcl_bpemb200_hd200/train.log &
+
+# last run: Jan27
+LG3_SG5_UP5_TRAIN_LSTM: /srv/scratch2/kew/fairseq_materials/rrgen_012021/de/lg3_sg5_up5
+	mkdir -p $</lstm_bpemb200_hd200
+	CUDA_VISIBLE_DEVICES=3 \
+	nohup \
+	fairseq-train \
+	$</prep \
+	-s review -t response \
+	--arch rrgen_lstm_arch \
+	--task rrgen_translation \
+	--truncate-source --truncate-target \
+	--user-dir /home/user/kew/INSTALLS/ffairseq/examples/rrgen/ \
+	--dataset-impl raw \
+	--max-epoch 20 \
+	--max-tokens 10240 --clip-norm 0.1 \
+	--lr 0.001 --optimizer adam \
+	--encoder-hidden-size 200 --decoder-hidden-size 200 \
+	--encoder-embed-path /srv/scratch2/kew/embeddings/data/de/de.wiki.bpe.vs10000.d200.w2v.txt \
+	--decoder-embed-path /srv/scratch2/kew/embeddings/data/de/de.wiki.bpe.vs10000.d200.w2v.txt \
+	--encoder-embed-dim 200 --decoder-embed-dim 200 --decoder-out-embed-dim 200 \
+	--share-all-embeddings \
+	--wandb-project readvisor \
+	--save-dir $</lstm_bpemb200_hd200/checkpoints/ --save-interval 4 >| $</lstm_bpemb200_hd200/train.log &
 
 
 # ---------------------------------------------
@@ -414,6 +439,7 @@ DE_SG0.7_SL3_LR1.8_UP5_PREP: /srv/scratch2/kew/fairseq_materials/rrgen_012021/de
 	--workers 20 \
 	--wandb-project readvisor
 
+# last run: Jan 26
 DE_SG0.7_SL3_LR1.8_UP5_TRAIN_LSTM_SRCL: /srv/scratch2/kew/fairseq_materials/rrgen_012021/de/SG0.7_SL3_LR1.8_UP5
 	mkdir -p $</lstm_srcl_bpemb200_hd200
 	CUDA_VISIBLE_DEVICES=2 \
@@ -442,8 +468,214 @@ DE_SG0.7_SL3_LR1.8_UP5_TRAIN_LSTM_SRCL: /srv/scratch2/kew/fairseq_materials/rrge
 	--wandb-project readvisor \
 	--save-dir $</lstm_srcl_bpemb200_hd200/checkpoints/ --save-interval 4 >| $</lstm_srcl_bpemb200_hd200/train.log &
 	
+# last run: Jan 28 BASELINE!
+DE_SG0.7_SL3_LR1.8_UP5_TRAIN_LSTM_BASE: /srv/scratch2/kew/fairseq_materials/rrgen_012021/de/SG0.7_SL3_LR1.8_UP5
+	mkdir -p $</lstm_bpemb200_hd200
+	CUDA_VISIBLE_DEVICES=3 \
+	nohup \
+	fairseq-train \
+	$</prep \
+	-s review -t response \
+	--arch rrgen_lstm_arch \
+	--task rrgen_translation \
+	--truncate-source --truncate-target \
+	--user-dir /home/user/kew/INSTALLS/ffairseq/examples/rrgen/ \
+	--dataset-impl raw \
+	--max-epoch 20 \
+	--max-tokens 20480 --update-freq 1 \
+	--lr 0.001 --optimizer adam --clip-norm 1.0 \
+	--encoder-embed-path /srv/scratch2/kew/embeddings/data/de/de.wiki.bpe.vs10000.d200.w2v.txt \
+	--decoder-embed-path /srv/scratch2/kew/embeddings/data/de/de.wiki.bpe.vs10000.d200.w2v.txt \
+	--encoder-embed-dim 200 --decoder-embed-dim 200 --decoder-out-embed-dim 200 \
+	--share-all-embeddings \
+	--encoder-hidden-size 200 \
+	--decoder-hidden-size 200 \
+	--wandb-project readvisor \
+	--save-dir $</lstm_bpemb200_hd200/checkpoints/ --save-interval 4 >| $</lstm_bpemb200_hd200/train.log &
+
+# last run Jan 27	
 DE_SG0.7_SL3_LR1.8_UP5_DECODE_LSTM_SRCL_TOPK: /srv/scratch2/kew/fairseq_materials/rrgen_012021/de/SG0.7_SL3_LR1.8_UP5
+	CUDA_VISIBLE_DEVICES=1 \
+	nohup \
+	fairseq-generate \
+	$</prep \
+	--path $</lstm_srcl_bpemb200_hd200/checkpoints/checkpoint_best.pt \
+	-s review -t response \
+	--task rrgen_translation --truncate-source --truncate-target \
+	--dataset-impl raw \
+	--user-dir /home/user/kew/INSTALLS/ffairseq/examples/rrgen/ \
+	--batch-size 128 \
+	--sampling \
+	--sampling-topk 5 \
+	--nbest 5 \
+	--remove-bpe sentencepiece \
+	--use-sentiment alpha_sentiment \
+	--use-category domain \
+	--use-rating rating \
+	--use-length review_length \
+	--wandb-project readvisor >| $</lstm_srcl_bpemb200_hd200/nbest5_topk5.txt &
+
+
+# ---------------------------------------------
+# SOUNDS GEN <= 0.7, SENT LEN >= 3, LR <=1.8, REx3
+# ---------------------------------------------
+
+DE_SG0.7_SL3_LR1.8_UP3_PREP: /srv/scratch2/kew/fairseq_materials/rrgen_012021/de/SG0.7_SL3_LR1.8_UP3
+	fairseq-preprocess \
+	--task rrgen_translation \
+	--trainpref $</bpe/train \
+	--validpref $</bpe/valid \
+	--testpref $</bpe/test \
+	--source-lang review \
+	--target-lang response \
+	--sent-ext alpha_sentiment \
+	--rate-ext rating \
+	--cate-ext domain \
+	--len-ext review_length \
+	--user-dir /home/user/kew/INSTALLS/ffairseq/examples/rrgen \
+	--joined-dictionary \
+	--destdir $</prep \
+	--dataset-impl raw \
+	--tokenizer space \
+	--bpe sentencepiece \
+	--workers 20 \
+	--wandb-project readvisor
+
+# last run: Jan 28
+DE_SG0.7_SL3_LR1.8_UP3_TRAIN_LSTM_SRCL: /srv/scratch2/kew/fairseq_materials/rrgen_012021/de/SG0.7_SL3_LR1.8_UP3
+	mkdir -p $</lstm_srcl_bpemb200_hd200
+	CUDA_VISIBLE_DEVICES=4 \
+	nohup \
+	fairseq-train \
+	$</prep \
+	-s review -t response \
+	--arch rrgen_lstm_arch \
+	--task rrgen_translation \
+	--truncate-source --truncate-target \
+	--user-dir /home/user/kew/INSTALLS/ffairseq/examples/rrgen/ \
+	--dataset-impl raw \
+	--max-epoch 30 \
+	--max-tokens 20480 --update-freq 1 \
+	--lr 0.001 --optimizer adam --clip-norm 1.0 \
+	--encoder-embed-path /srv/scratch2/kew/embeddings/data/de/de.wiki.bpe.vs10000.d200.w2v.txt \
+	--decoder-embed-path /srv/scratch2/kew/embeddings/data/de/de.wiki.bpe.vs10000.d200.w2v.txt \
+	--encoder-embed-dim 200 --decoder-embed-dim 200 --decoder-out-embed-dim 200 \
+	--share-all-embeddings \
+	--encoder-hidden-size 200 \
+	--decoder-hidden-size 200 \
+	--use-sentiment alpha_sentiment \
+	--use-category domain \
+	--use-rating rating \
+	--use-length review_length \
+	--wandb-project readvisor \
+	--save-dir $</lstm_srcl_bpemb200_hd200/checkpoints/ --save-interval 4 >| $</lstm_srcl_bpemb200_hd200/train.log &
+	
+# lstm base
+# last run: Jan 28
+DE_SG0.7_SL3_LR1.8_UP3_TRAIN_LSTM_BASE: /srv/scratch2/kew/fairseq_materials/rrgen_012021/de/SG0.7_SL3_LR1.8_UP3
+	mkdir -p $</lstm_bpemb200_hd200
 	CUDA_VISIBLE_DEVICES=2 \
+	nohup \
+	fairseq-train \
+	$</prep \
+	-s review -t response \
+	--arch rrgen_lstm_arch \
+	--task rrgen_translation \
+	--truncate-source --truncate-target \
+	--user-dir /home/user/kew/INSTALLS/ffairseq/examples/rrgen/ \
+	--dataset-impl raw \
+	--max-epoch 30 \
+	--max-tokens 20480 --update-freq 1 \
+	--lr 0.001 --optimizer adam --clip-norm 1.0 \
+	--encoder-embed-path /srv/scratch2/kew/embeddings/data/de/de.wiki.bpe.vs10000.d200.w2v.txt \
+	--decoder-embed-path /srv/scratch2/kew/embeddings/data/de/de.wiki.bpe.vs10000.d200.w2v.txt \
+	--encoder-embed-dim 200 --decoder-embed-dim 200 --decoder-out-embed-dim 200 \
+	--share-all-embeddings \
+	--encoder-hidden-size 200 \
+	--decoder-hidden-size 200 \
+	--wandb-project readvisor \
+	--save-dir $</lstm_bpemb200_hd200/checkpoints/ --save-interval 4 >| $</lstm_bpemb200_hd200/train.log &
+
+# last run
+DE_SG0.7_SL3_LR1.8_UP3_DECODE_LSTM_SRCL_TOPK: /srv/scratch2/kew/fairseq_materials/rrgen_012021/de/SG0.7_SL3_LR1.8_UP3
+	CUDA_VISIBLE_DEVICES=1 \
+	nohup \
+	fairseq-generate \
+	$</prep \
+	--path $</lstm_srcl_bpemb200_hd200/checkpoints/checkpoint_best.pt \
+	-s review -t response \
+	--task rrgen_translation --truncate-source --truncate-target \
+	--dataset-impl raw \
+	--user-dir /home/user/kew/INSTALLS/ffairseq/examples/rrgen/ \
+	--batch-size 128 \
+	--sampling \
+	--sampling-topk 5 \
+	--nbest 5 \
+	--remove-bpe sentencepiece \
+	--use-sentiment alpha_sentiment \
+	--use-category domain \
+	--use-rating rating \
+	--use-length review_length \
+	--wandb-project readvisor >| $</lstm_srcl_bpemb200_hd200/nbest5_topk5.txt &
+
+
+# ---------------------------------------------
+# SOUNDS GEN <= 0.7, SENT LEN >= 3, LR <=1.8, REx3
+# ---------------------------------------------
+
+DE_SG0.7_SL3_LR1.8_UP1_PREP: /srv/scratch2/kew/fairseq_materials/rrgen_012021/de/SG0.7_SL3_LR1.8_UP1
+	fairseq-preprocess \
+	--task rrgen_translation \
+	--trainpref $</bpe/train \
+	--validpref $</bpe/valid \
+	--testpref $</bpe/test \
+	--source-lang review \
+	--target-lang response \
+	--sent-ext alpha_sentiment \
+	--rate-ext rating \
+	--cate-ext domain \
+	--len-ext review_length \
+	--user-dir /home/user/kew/INSTALLS/ffairseq/examples/rrgen \
+	--joined-dictionary \
+	--destdir $</prep \
+	--dataset-impl raw \
+	--tokenizer space \
+	--bpe sentencepiece \
+	--workers 20 \
+	--wandb-project readvisor
+
+# last run:
+DE_SG0.7_SL3_LR1.8_UP1_TRAIN_LSTM_SRCL: /srv/scratch2/kew/fairseq_materials/rrgen_012021/de/SG0.7_SL3_LR1.8_UP1
+	mkdir -p $</lstm_srcl_bpemb200_hd200
+	CUDA_VISIBLE_DEVICES=5 \
+	nohup \
+	fairseq-train \
+	$</prep \
+	-s review -t response \
+	--arch rrgen_lstm_arch \
+	--task rrgen_translation \
+	--truncate-source --truncate-target \
+	--user-dir /home/user/kew/INSTALLS/ffairseq/examples/rrgen/ \
+	--dataset-impl raw \
+	--max-epoch 30 \
+	--max-tokens 20480 --update-freq 1 \
+	--lr 0.001 --optimizer adam --clip-norm 1.0 \
+	--encoder-embed-path /srv/scratch2/kew/embeddings/data/de/de.wiki.bpe.vs10000.d200.w2v.txt \
+	--decoder-embed-path /srv/scratch2/kew/embeddings/data/de/de.wiki.bpe.vs10000.d200.w2v.txt \
+	--encoder-embed-dim 200 --decoder-embed-dim 200 --decoder-out-embed-dim 200 \
+	--share-all-embeddings \
+	--encoder-hidden-size 200 \
+	--decoder-hidden-size 200 \
+	--use-sentiment alpha_sentiment \
+	--use-category domain \
+	--use-rating rating \
+	--use-length review_length \
+	--wandb-project readvisor \
+	--save-dir $</lstm_srcl_bpemb200_hd200/checkpoints/ --save-interval 4 >| $</lstm_srcl_bpemb200_hd200/train.log &
+
+# last run Jan 27	
+DE_SG0.7_SL3_LR1.8_UP1_DECODE_LSTM_SRCL_TOPK: /srv/scratch2/kew/fairseq_materials/rrgen_012021/de/SG0.7_SL3_LR1.8_UP1
+	CUDA_VISIBLE_DEVICES=1 \
 	nohup \
 	fairseq-generate \
 	$</prep \
