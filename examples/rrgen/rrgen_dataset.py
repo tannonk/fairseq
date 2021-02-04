@@ -185,6 +185,16 @@ def collate(
             batch['alignments'] = alignments
             batch['align_weights'] = align_weights
 
+    if samples[0].get("constraints", None) is not None:
+        # Collate the packed constraints across the samples, padding to
+        # the length of the longest sample.
+        lens = [sample.get("constraints").size(0) for sample in samples]
+        max_len = max(lens)
+        constraints = torch.zeros((len(samples), max(lens))).long()
+        for i, sample in enumerate(samples):
+            constraints[i, 0 : lens[i]] = samples[i].get("constraints")
+        batch["constraints"] = constraints
+
     return batch
 
 
@@ -221,6 +231,8 @@ class RRGenDataset(FairseqDataset):
             target if it's absent (default: False).
         align_dataset (torch.utils.data.Dataset, optional): dataset
             containing alignments.
+        constraints (Tensor, optional): 2d tensor with a concatenated, zero-
+            delimited list of constraints for each sentence.
         append_bos (bool, optional): if set, appends bos to the beginning of
             source/target sentence.
         num_buckets (int, optional): if set to a value greater than 0, then
@@ -243,6 +255,7 @@ class RRGenDataset(FairseqDataset):
         left_pad_source=True, left_pad_target=False,
         shuffle=True, input_feeding=True,
         remove_eos_from_source=False, append_eos_to_target=False,
+        constraints=None,
         align_dataset=None,
         append_bos=False, eos=None,
         num_buckets=0,
@@ -280,6 +293,7 @@ class RRGenDataset(FairseqDataset):
         self.align_dataset = align_dataset
         if self.align_dataset is not None:
             assert self.tgt_sizes is not None, "Both source and target needed when alignments are provided"
+        self.constraints = constraints
         self.append_bos = append_bos
         self.eos = (eos if eos is not None else src_dict.eos())
         self.src_lang_id = src_lang_id
@@ -455,6 +469,8 @@ class RRGenDataset(FairseqDataset):
 
         if self.align_dataset is not None:
             example['alignment'] = self.align_dataset[index]
+        if self.constraints is not None:
+            example["constraints"] = self.constraints[index]
 
         return example
 

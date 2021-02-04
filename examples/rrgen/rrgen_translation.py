@@ -627,9 +627,19 @@ class RRGenTranslationTask(LegacyFairseqTask):
             norm_senti = self.args.norm_senti,            
         )
 
-    def build_dataset_for_inference(self, src_tokens, src_lengths):
-        # TODO: update to match training!
-        return LanguagePairDataset(src_tokens, src_lengths, self.source_dictionary)
+    def build_dataset_for_inference(self, src_tokens, src_lengths, ext_senti=None, ext_cate=None, ext_rate=None, ext_len=None, constraints=None):
+        # return LanguagePairDataset(src_tokens, src_lengths, self.source_dictionary)
+        return RRGenDataset(
+            src_tokens,
+            src_lengths,
+            self.source_dictionary,
+            ext_senti=ext_senti,
+            ext_cate=ext_cate,
+            ext_rate=ext_rate,
+            ext_len=ext_len,
+            tgt_dict=self.target_dictionary,
+            constraints=constraints,
+        )
 
     def build_model(self, args):
         model = super().build_model(args)
