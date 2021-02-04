@@ -11,6 +11,8 @@ Email: kew@cl.uzh.ch
 
 """
 
+import logging
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -30,6 +32,8 @@ from typing import Dict, List, Optional, Tuple
 # for rescaling A-component features
 import numpy as np
 # from sklearn.preprocessing import MinMaxScaler
+
+logger = logging.getLogger(__name__)
 
 
 DEFAULT_MAX_SOURCE_POSITIONS = 1e5
@@ -92,13 +96,17 @@ class RRGenLSTMModel(FairseqEncoderDecoderModel):
                             help='dropout probability for decoder input embedding')
         parser.add_argument('--decoder-dropout-out', type=float, metavar='D',
                             help='dropout probability for decoder output')
+        
+        parser.add_argument('--combine-ext-features', default='mlp', choices=['mlp', 'concat'], type=str, required=False, help='specify method for combining additional external features. `mlp` concatenates attributes to encoder outputs and projects through a linear layer to initialise decoder hidden state. `concat` concatenates ext attribute features with each decoder hidden state. Note, the decoder hidden state is extended as a consequence of concat.')
+                         
+        
         # fmt: on
 
     @classmethod
     def build_model(cls, args, task):
         """Build a new model instance."""
         # make sure that all args are properly defaulted (in case there are any new ones)
-
+        # breakpoint()
         rrgen_lstm_arch(args)
 
         if args.encoder_layers != args.decoder_layers:
@@ -204,8 +212,10 @@ class RRGenLSTMModel(FairseqEncoderDecoderModel):
             use_cate=args.use_category,
             use_rate=args.use_rating,
             use_len=args.use_length,
-            tie_ext_features=args.tie_ext_features
+            combine_ext_features=args.combine_ext_features,
         )
+
+        logger.info(f'method for combining external attribute features: {args.combine_ext_features}')
 
         return cls(encoder, decoder)
 
@@ -420,7 +430,7 @@ class RRGenLSTMDecoder(FairseqIncrementalDecoder):
         use_cate: bool = False,
         use_rate: bool = False,
         use_len: bool = False,
-        tie_ext_features: bool = False
+        combine_ext_features: str = '',
     ):
         super().__init__(dictionary)
         self.dropout_in_module = FairseqDropout(
@@ -430,16 +440,16 @@ class RRGenLSTMDecoder(FairseqIncrementalDecoder):
         self.hidden_size = hidden_size
         self.share_input_output_embed = share_input_output_embed
         self.need_attn = True
-        self.encoder_output_units = encoder_output_units
         self.max_target_positions = max_target_positions
         self.residuals = residuals
         self.num_layers = num_layers
-        self.tie_ext_features = tie_ext_features
+        # self.tie_ext_features = tie_ext_features # necessary?
         self.use_senti = use_senti
         self.use_cate = use_cate
         self.use_rate = use_rate
         self.use_len = use_len
-
+        self.combine_ext_features = combine_ext_features 
+        
         self.adaptive_softmax = None
         num_embeddings = len(dictionary)
         padding_idx = dictionary.pad()
@@ -449,43 +459,55 @@ class RRGenLSTMDecoder(FairseqIncrementalDecoder):
         else:
             self.embed_tokens = pretrained_embed
 
-        # incorporate external attribute features (A-Component)
-        # by concatenating the attribute features onto the
-        # encoder outputs. Here we simply increase the size
-        # of the hidden vector before it gets passed through
-        # MLP
+        # if A-components are concatenated, update decoder
+        # hidden_size (original hidden_size + size
+        # of attributes)
+        ext_feature_size = 0
+        if self.use_senti == 'sentiment':
+            ext_feature_size += 1
+        elif self.use_senti == 'alpha_sentiment':
+            # for alpha_seystems sentiment, we expect
+            # the sentiment attribute to be a 25d vector
+            ext_feature_size += 25
+        if self.use_rate:
+            ext_feature_size += 1
+        if self.use_cate:
+            ext_feature_size += 1
+        if self.use_len:
+            ext_feature_size += 1
 
-        # import pdb;pdb.set_trace()
-
-        self.tie_ext_feature_size = encoder_output_units
-
-        if self.tie_ext_features:
-            if self.use_senti:
-                if self.use_senti == 'sentiment':
-                    self.tie_ext_feature_size += 1
-                elif self.use_senti == 'alpha_sentiment':
-                    # for alpha_seystems sentiment, we expect
-                    # the sentiment attribute to be a 25d vector
-                    self.tie_ext_feature_size += 25
-            if self.use_rate:
-                self.tie_ext_feature_size += 1
-            if self.use_cate:
-                self.tie_ext_feature_size += 1
-            if self.use_len:
-                self.tie_ext_feature_size += 1
-
-        # from original -> handles projections from
-        # hidden_size+attribute_feats to hidden_size
-        if self.tie_ext_feature_size != hidden_size and self.tie_ext_feature_size != 0:
-            self.encoder_hidden_proj = Linear(
-                self.tie_ext_feature_size, hidden_size)
-            self.encoder_cell_proj = Linear(
-                self.tie_ext_feature_size, hidden_size)
+        # breakpoint()
+        
+        self.encoder_output_units = encoder_output_units
+        
+        if encoder_output_units != hidden_size and encoder_output_units != 0:
+            self.encoder_hidden_proj = Linear(encoder_output_units, hidden_size)
+            self.encoder_cell_proj = Linear(encoder_output_units, hidden_size)
         else:
             self.encoder_hidden_proj = self.encoder_cell_proj = None
 
+        if ext_feature_size and self.combine_ext_features == 'mlp': # tk
+            # change projection layer defined above to
+            # appropriate size to include ext_feature attributes
+            # i.e. projects x from `encoder_output_units +
+            # ext_feature down` x' to `decoder hidden_size`
+            self.encoder_hidden_proj = Linear(
+                encoder_output_units + ext_feature_size, hidden_size)
+            self.encoder_cell_proj = Linear(
+                encoder_output_units + ext_feature_size, hidden_size)
+        
+        elif ext_feature_size and self.combine_ext_features == 'concat':
+            # Update decoder hidden size if we concatenate
+            # ext attribute features directly in decoder
+            hidden_size += ext_feature_size
+            self.hidden_size = hidden_size
+
+        else:
+            pass # leave it as is!
+
         # disable input feeding if there is no encoder
-        # input feeding is described in arxiv.org/abs/1508.04025
+        # input feeding is described in
+        # arxiv.org/abs/1508.04025
         input_feed_size = 0 if encoder_output_units == 0 else hidden_size
 
         self.layers = nn.ModuleList([
@@ -495,7 +517,7 @@ class RRGenLSTMDecoder(FairseqIncrementalDecoder):
             )
             for layer in range(num_layers)
         ])
-
+        
         # initialise attention
         if attention:
             # TODO make bias configurable
@@ -503,6 +525,7 @@ class RRGenLSTMDecoder(FairseqIncrementalDecoder):
                 hidden_size, encoder_output_units, hidden_size, bias=False)
         else:
             self.attention = None
+        
 
         if hidden_size != out_embed_dim:
             self.additional_fc = Linear(hidden_size, out_embed_dim)
@@ -587,37 +610,85 @@ class RRGenLSTMDecoder(FairseqIncrementalDecoder):
         # bsz, tgt_len, vec_size -> tgt_len, bsz, vec_size
         x = x.transpose(0, 1)
 
-        # import pdb
-        # pdb.set_trace()
+        # breakpoint()
 
         # initialize previous states (or get from cache during incremental generation)
         if incremental_state is not None and len(incremental_state) > 0:
             prev_hiddens, prev_cells, input_feed = self.get_cached_state(
                 incremental_state)
+        
         elif encoder_out is not None:
             # setup recurrent cells
 
-            if self.use_senti and ext_senti is not None:
-                encoder_hiddens, encoder_cells = self.extend_hidden_state(
-                    encoder_hiddens, encoder_cells, ext_senti)
-            if self.use_cate and ext_cate is not None:
-                encoder_hiddens, encoder_cells = self.extend_hidden_state(
-                    encoder_hiddens, encoder_cells, ext_cate)
-            if self.use_rate and ext_rate is not None:
-                encoder_hiddens, encoder_cells = self.extend_hidden_state(
-                    encoder_hiddens, encoder_cells, ext_rate)
-            if self.use_len and ext_len is not None:
-                encoder_hiddens, encoder_cells = self.extend_hidden_state(
-                    encoder_hiddens, encoder_cells, ext_len)
+            # extend encoder outputs with external attribute
+            # features before projecting to decode hidden size
+            if self.combine_ext_features == 'mlp':
 
+                if ext_senti is not None:
+                    encoder_hiddens = self.concatenate_ext_attributes_on_encoder_output_states(
+                        encoder_hiddens, ext_senti)
+                    encoder_cells = self.concatenate_ext_attributes_on_encoder_output_states(
+                        encoder_cells, ext_senti)
+
+                if ext_cate is not None:
+                    encoder_hiddens = self.concatenate_ext_attributes_on_encoder_output_states(
+                        encoder_hiddens, ext_cate)
+                    encoder_cells = self.concatenate_ext_attributes_on_encoder_output_states(
+                        encoder_cells, ext_cate)
+                
+                if ext_rate is not None:
+                    encoder_hiddens = self.concatenate_ext_attributes_on_encoder_output_states(
+                        encoder_hiddens, ext_rate)
+                    encoder_cells = self.concatenate_ext_attributes_on_encoder_output_states(
+                        encoder_cells, ext_rate)
+
+                if ext_len is not None:
+                    encoder_hiddens = self.concatenate_ext_attributes_on_encoder_output_states(
+                        encoder_hiddens, ext_len)
+                    encoder_cells = self.concatenate_ext_attributes_on_encoder_output_states(
+                        encoder_cells, ext_len)
+
+            # breakpoint()
+            
             prev_hiddens = [encoder_hiddens[i] for i in range(self.num_layers)]
             prev_cells = [encoder_cells[i] for i in range(self.num_layers)]
+            
+            # project oncoder output dimensions to decoder
+            # hidden size (if different)
             if self.encoder_hidden_proj is not None:
-                prev_hiddens = [self.encoder_hidden_proj(
-                    y) for y in prev_hiddens]
+                prev_hiddens = [self.encoder_hidden_proj(y) for y in prev_hiddens]
                 prev_cells = [self.encoder_cell_proj(y) for y in prev_cells]
             input_feed = x.new_zeros(bsz, self.hidden_size)
+        
+            # breakpoint()
 
+            if self.combine_ext_features == 'concat':
+
+                if ext_senti is not None:
+                    # print('!!! extended prev_hiddens[0]')
+                    prev_hiddens = self.concatenate_ext_attributes_on_previous_states(
+                        prev_hiddens, ext_senti)
+                    prev_cells = self.concatenate_ext_attributes_on_previous_states(
+                        prev_cells, ext_senti)
+
+                if ext_cate is not None:
+                    prev_hiddens = self.concatenate_ext_attributes_on_previous_states(
+                        prev_hiddens, ext_cate)
+                    prev_cells = self.concatenate_ext_attributes_on_previous_states(
+                        prev_cells, ext_cate)
+
+                if ext_rate is not None:
+                    prev_hiddens = self.concatenate_ext_attributes_on_previous_states(
+                        prev_hiddens, ext_rate)
+                    prev_cells = self.concatenate_ext_attributes_on_previous_states(
+                        prev_cells, ext_rate)
+
+                if ext_len is not None:
+                    prev_hiddens = self.concatenate_ext_attributes_on_previous_states(
+                        prev_hiddens, ext_len)
+                    prev_cells = self.concatenate_ext_attributes_on_previous_states(
+                        prev_cells, ext_len)
+        
         else:
             # setup zero cells, since there is no encoder
             zero_state = x.new_zeros(bsz, self.hidden_size)
@@ -642,7 +713,6 @@ class RRGenLSTMDecoder(FairseqIncrementalDecoder):
 
             for i, rnn in enumerate(self.layers):
                 # recurrent cell
-
                 hidden, cell = rnn(input, (prev_hiddens[i], prev_cells[i]))
 
                 # hidden state becomes the input to the next layer
@@ -654,6 +724,8 @@ class RRGenLSTMDecoder(FairseqIncrementalDecoder):
                 prev_hiddens[i] = hidden
                 prev_cells[i] = cell
 
+            # breakpoint()
+
             # apply attention using the last layer's hidden state
             if self.attention is not None:
                 assert attn_scores is not None
@@ -662,8 +734,7 @@ class RRGenLSTMDecoder(FairseqIncrementalDecoder):
                 # hidden = Tensor(bsz, hidden_size)
                 # encoder_outs = Tensor(srclen, bsz, hidden_size)
                 # encoder_padding_mask = Tensor(srclen, bsz)
-                out, attn_scores[:, j, :] = self.attention(
-                    hidden, encoder_outs, encoder_padding_mask)
+                out, attn_scores[:, j, :] = self.attention(hidden, encoder_outs, encoder_padding_mask)
 
             else:
                 out = hidden
@@ -785,41 +856,76 @@ class RRGenLSTMDecoder(FairseqIncrementalDecoder):
     def make_generation_fast_(self, need_attn=False, **kwargs):
         self.need_attn = need_attn
 
-    @staticmethod
-    def extend_hidden_state(encoder_hiddens: Tensor, encoder_cells: Tensor, ext_atts: Tensor):
+    def concatenate_ext_attributes_on_encoder_output_states(
+        self,
+        lstm_outs: Tensor,
+        ext_att: Tensor
+        ) -> Tensor:
         """
-        Concatenate ext attribute vectors to current hidden
-        states and cells along axis 1
+        Concatenate ext attribute vectors to hidden
+        states and cells before projection through linear layer
 
-        Args:
-            encoder_hiddens : final encoder hidden states
-            encoder_cells : final encoder hidden cells
-            ext_vector : attribute features, e.g. sentiment,
-            category, rating
+        NOTE: used if --project-ext_features == True,
+        otherwise, see concatenate_ext_attributes_on_previous_states.
         """
 
-        # import pdb
-        # pdb.set_trace()
+        n = lstm_outs.size()[0]
+        ext_att = ext_att.unsqueeze(0).repeat(n, 1, 1)
+        new_lstm_outs = torch.cat([lstm_outs, ext_att], dim=-1)
+        return new_lstm_outs
 
-        # repeat ext_senti attribute vector by
-        # number of hidden states in encoder output
-        ext_atts = ext_atts.repeat(len(encoder_hiddens), 1)
+    def concatenate_ext_attributes_on_previous_states(
+        self,
+        prev_states: List[Tensor],
+        ext_attr: Tensor
+        ) -> List[Tensor]:
+        """
+        Concatenate ext attribute vectors to previous hidden
+        states and cells after projection through linear
+        layer (if necessary)
 
-        # concatenate attribute features with
-        # encoder hidden states
-        # encoder_hiddens = [torch.cat((h, v.unsqueeze(-1)), 1) for h, v in zip(encoder_hiddens, ext_atts)]
-        # encoder_hiddens = [torch.cat((h, ext_atts), 1) for h in encoder_hiddens]
-        new_hiddens = []
-        for hidden in encoder_hiddens:
-            new_hiddens.append(torch.cat((hidden, ext_atts), 1))
+        NOTE: used if --project-ext_features == False,
+        """
 
-        # encoder_cells = [torch.cat((c, v.unsqueeze(-1)), 1) for c, v in zip(encoder_cells, ext_atts)]
-        # encoder_cells = [torch.cat((c, ext_atts), 1) for h in encoder_cells]
-        new_cells = []
-        for cell in encoder_cells:
-            new_cells.append(torch.cat((cell, ext_atts), 1))
+        new_states = []
+        for state in prev_states:
+            new_states.append(torch.cat([state, ext_attr], -1))
+        return new_states
+
+    # @staticmethod
+    # def extend_encoder_output(encoder_hiddens: Tensor, encoder_cells: Tensor, ext_atts: Tensor) -> List[Tensor]:
+    #     """
+    #     Concatenate ext attribute vectors to current hidden
+    #     states and cells along axis 1
+
+    #     Args:
+    #         encoder_hiddens : final encoder hidden states
+    #         encoder_cells : final encoder hidden cells
+    #         ext_vector : attribute features, e.g. sentiment,
+    #         category, rating
+    #     """
+
+    #     # breakpoint()
+
+    #     # repeat ext_senti attribute vector by
+    #     # number of hidden states in encoder output
+    #     # ext_atts = ext_atts.repeat(len(encoder_hiddens), 1)
+
+    #     # concatenate attribute features with
+    #     # encoder hidden states
+    #     # encoder_hiddens = [torch.cat((h, v.unsqueeze(-1)), 1) for h, v in zip(encoder_hiddens, ext_atts)]
+    #     # encoder_hiddens = [torch.cat((h, ext_atts), 1) for h in encoder_hiddens]
+    #     new_hiddens = []
+    #     for hidden in encoder_hiddens:
+    #         new_hiddens.append(torch.cat((hidden, ext_atts), 1))
+
+    #     # encoder_cells = [torch.cat((c, v.unsqueeze(-1)), 1) for c, v in zip(encoder_cells, ext_atts)]
+    #     # encoder_cells = [torch.cat((c, ext_atts), 1) for h in encoder_cells]
+    #     new_cells = []
+    #     for cell in encoder_cells:
+    #         new_cells.append(torch.cat((cell, ext_atts), 1))
         
-        return new_hiddens, new_cells
+    #     return new_hiddens, new_cells
 
 
 def Embedding(num_embeddings, embedding_dim, padding_idx):
@@ -897,5 +1003,4 @@ def rrgen_lstm_arch(args):
         args, 'skip_invalid_size_inputs_valid_test', True)
     args.max_tokens = getattr(args, 'max_tokens', 2000)
     args.batch_size = getattr(args, 'batch_size', 8)
-    # args.num_workers = getattr(args, 'num-workers', 0) # good for debugging
-    args.tie_ext_features = getattr(args, 'tie_ext_features', True)
+    # args.combine_ext_features = getattr(args, 'combine_ext_features', )
