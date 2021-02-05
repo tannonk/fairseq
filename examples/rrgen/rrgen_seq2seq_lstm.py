@@ -1003,4 +1003,4 @@ def rrgen_lstm_arch(args):
         args, 'skip_invalid_size_inputs_valid_test', True)
     args.max_tokens = getattr(args, 'max_tokens', 2000)
     args.batch_size = getattr(args, 'batch_size', 8)
-    # args.combine_ext_features = getattr(args, 'combine_ext_features', )
+    args.combine_ext_features = getattr(args, 'combine_ext_features', 'mlp') # required for generating with model trained before feature was added
