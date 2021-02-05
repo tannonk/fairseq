@@ -14,6 +14,7 @@ import subprocess
 import warnings
 from argparse import Namespace
 from collections import OrderedDict
+from dataclasses import dataclass
 from typing import Any, Dict, List, Mapping, Optional
 
 # bugfix for multi-gpu training https://github.com/pytorch/pytorch/issues/37377 
@@ -21,7 +22,6 @@ from typing import Any, Dict, List, Mapping, Optional
 
 import torch
 import torch.distributed as dist
-from fairseq import utils
 from fairseq.dataclass.configs import DistributedTrainingConfig, FairseqConfig
 from omegaconf import open_dict
 
@@ -50,169 +50,195 @@ def infer_init_method(cfg: DistributedTrainingConfig, force_distributed=False):
     if cfg.distributed_init_method is not None or cfg.tpu:
         return
 
+    num_pipelines_per_node = None
     if cfg.pipeline_model_parallel:
-        balance_exists = (
-            cfg.pipeline_balance is not None
-            or cfg.pipeline_encoder_balance is not None
-            or cfg.pipeline_decoder_balance is not None
-        )
-        devices_exist = (
-            cfg.pipeline_devices is not None
-            or cfg.pipeline_encoder_devices is not None
-            or cfg.pipeline_decoder_devices is not None
-        )
-        if not balance_exists:
-            raise ValueError(
-                "--pipeline-balance is currently required for pipeline model parallelism"
-            )
-        if not devices_exist:
-            raise ValueError(
-                "--pipeline-devices is currently required for pipeline model parallelism"
-            )
+        num_pipeline_devices, num_pipelines_per_node = _pipeline_parallel_pre_init(cfg)
 
-        cfg.pipeline_balance = utils.eval_str_list(cfg.pipeline_balance, type=int)
-        if cfg.pipeline_devices is not None:
-            cfg.pipeline_devices = utils.eval_str_list(cfg.pipeline_devices, type=int)
-            num_pipeline_devices = len(set(cfg.pipeline_devices))
-        else:
-            cfg.pipeline_encoder_devices = utils.eval_str_list(
-                cfg.pipeline_encoder_devices, type=int
-            )
-            cfg.pipeline_decoder_devices = utils.eval_str_list(
-                cfg.pipeline_decoder_devices, type=int
-            )
-            num_pipeline_devices = len(
-                set(cfg.pipeline_encoder_devices + cfg.pipeline_decoder_devices)
-            )
-        gpus_per_node = torch.cuda.device_count()
-        assert (
-            gpus_per_node >= num_pipeline_devices
-            and gpus_per_node % num_pipeline_devices == 0
-        ), (
-            "the number of unique device IDs in --pipeline-devices must evenly divide "
-            "the number of GPUs per node (multi-node pipelining is not yet supported)"
-        )
-        num_pipelines_per_node = gpus_per_node // num_pipeline_devices
-
-    # support torch.distributed.launch
     if all(
         key in os.environ
         for key in ["MASTER_ADDR", "MASTER_PORT", "WORLD_SIZE", "RANK"]
     ):
-        cfg.distributed_init_method = "env://"
-        cfg.distributed_world_size = int(os.environ["WORLD_SIZE"])
-        cfg.distributed_rank = int(os.environ["RANK"])
-        # processes are created by torch.distributed.launch
-        cfg.distributed_no_spawn = True
-
-    # we can determine the init method automatically for Slurm
+        # support torch.distributed.launch
+        _infer_torch_distributed_launch_init(cfg)
     elif cfg.distributed_port > 0:
-        node_list = os.environ.get("SLURM_STEP_NODELIST")
-        if node_list is None:
-            node_list = os.environ.get("SLURM_JOB_NODELIST")
-        if node_list is not None:
-            try:
-                hostnames = subprocess.check_output(
-                    ["scontrol", "show", "hostnames", node_list]
-                )
-                cfg.distributed_init_method = "tcp://{host}:{port}".format(
-                    host=hostnames.split()[0].decode("utf-8"),
-                    port=cfg.distributed_port,
-                )
-                nnodes = int(os.environ.get("SLURM_NNODES"))
-                ntasks_per_node = os.environ.get("SLURM_NTASKS_PER_NODE")
-                if ntasks_per_node is not None:
-                    ntasks_per_node = int(ntasks_per_node)
-                else:
-                    ntasks = int(os.environ.get("SLURM_NTASKS"))
-                    nnodes = int(os.environ.get("SLURM_NNODES"))
-                    assert ntasks % nnodes == 0
-                    ntasks_per_node = int(ntasks / nnodes)
-                if ntasks_per_node == 1:
-                    gpus_per_node = torch.cuda.device_count()
-                    node_id = int(os.environ.get("SLURM_NODEID"))
-                    cfg.distributed_rank = node_id * gpus_per_node
-                    cfg.distributed_world_size = nnodes * gpus_per_node
-                elif cfg.pipeline_model_parallel:
-                    assert ntasks_per_node == num_pipelines_per_node, (
-                        "SLURM --ntasks-per-node must match number of pipelines per "
-                        "node (={})".format(num_pipelines_per_node)
-                    )
-                    cfg.distributed_no_spawn = True
-                    # For 4-way MP on nodes with 8 GPUs, ranks will be [0, 1] on
-                    # the first node, [1, 2] on the second node, etc. This
-                    # matches torch.distributed.launch.
-                    node_id = int(os.environ.get("SLURM_NODEID"))
-                    local_id = int(os.environ.get("SLURM_LOCALID"))
-                    cfg.distributed_rank = node_id * num_pipelines_per_node + local_id
-                    # In the above example, device_id will always be in [0, 1],
-                    # which also matches torch.distributed.launch.
-                    cfg.device_id = local_id
-                    # We also want to set distributed_world_size to be the total
-                    # number of pipelines across all nodes.
-                    cfg.distributed_world_size = nnodes * num_pipelines_per_node
-                else:
-                    assert ntasks_per_node == cfg.distributed_world_size // nnodes
-                    cfg.distributed_no_spawn = True
-                    cfg.distributed_rank = int(os.environ.get("SLURM_PROCID"))
-                    cfg.device_id = int(os.environ.get("SLURM_LOCALID"))
-            except subprocess.CalledProcessError as e:  # scontrol failed
-                raise e
-            except FileNotFoundError:  # Slurm is not installed
-                pass
-
+        # we can determine the init method automatically for Slurm
+        _infer_slurm_init(cfg, num_pipelines_per_node)
     elif cfg.distributed_world_size > 1 or force_distributed:
         # fallback for single node with multiple GPUs
-        assert cfg.distributed_world_size <= torch.cuda.device_count(), \
-            f"world size is {cfg.distributed_world_size} but have {torch.cuda.device_count()} available devices"
-        port = random.randint(10000, 20000)
-        cfg.distributed_init_method = "tcp://localhost:{port}".format(port=port)
+        _infer_single_node_init(cfg)
 
     if cfg.pipeline_model_parallel:
-        if not cfg.distributed_no_spawn:
-            # When distributed_no_spawn is False, we expect distributed_rank and
-            # distributed_world_size to be based on the total number of GPUs, so
-            # we need to correct them to be based on the number of pipelines.
-            assert cfg.distributed_world_size % num_pipeline_devices == 0
-            cfg.distributed_world_size = (
-                cfg.distributed_world_size // num_pipeline_devices
-            )
-            # In the case of 4-way MP on nodes with 8 GPUs, we want
-            # distributed_rank to be the starting GPU index for each pipeline
-            # i.e., 0, 2, ...
-            assert cfg.distributed_rank % gpus_per_node == 0
-            assert cfg.distributed_rank % num_pipeline_devices == 0
-
-            with open_dict(cfg):
-                cfg.distributed_rank = cfg.distributed_rank // num_pipeline_devices
-                # launch one process per pipeline
-                cfg.distributed_num_procs = num_pipelines_per_node
-
-        # if we have 4-way MP on a node with 8 GPUs, we want device_ids to be 0
-        # and 4, indicating the starting device IDs for each pipeline
-        cfg.device_id *= num_pipeline_devices
-
-        if cfg.device_id > 0:
-            # if there's multiple pipelines on a node (e.g., 4-way MP on an 8
-            # GPU node), we need to adjust pipeline_devices accordingly
-            logger.debug(
-                "setting CUDA device={} on rank {}".format(
-                    cfg.device_id, cfg.distributed_rank
-                )
-            )
-            torch.cuda.set_device(cfg.device_id)
-            with open_dict(cfg):
-                cfg.pipeline_devices = [cfg.device_id + d for d in cfg.pipeline_devices]
-            logger.info(
-                "setting pipeline_devices={} on rank {}".format(
-                    cfg.pipeline_devices, cfg.distributed_rank
-                )
-            )
+        _pipeline_parallel_post_init(cfg, num_pipeline_devices, num_pipelines_per_node)
     elif not cfg.distributed_no_spawn:
         with open_dict(cfg):
             cfg.distributed_num_procs = min(
                 torch.cuda.device_count(), cfg.distributed_world_size
             )
+
+
+def _infer_torch_distributed_launch_init(cfg: DistributedTrainingConfig):
+    cfg.distributed_init_method = "env://"
+    cfg.distributed_world_size = int(os.environ["WORLD_SIZE"])
+    cfg.distributed_rank = int(os.environ["RANK"])
+    # processes are created by torch.distributed.launch
+    cfg.distributed_no_spawn = True
+
+
+def _infer_slurm_init(cfg: DistributedTrainingConfig, num_pipelines_per_node):
+    node_list = os.environ.get("SLURM_STEP_NODELIST")
+    if node_list is None:
+        node_list = os.environ.get("SLURM_JOB_NODELIST")
+    if node_list is not None:
+        try:
+            hostnames = subprocess.check_output(
+                ["scontrol", "show", "hostnames", node_list]
+            )
+            cfg.distributed_init_method = "tcp://{host}:{port}".format(
+                host=hostnames.split()[0].decode("utf-8"),
+                port=cfg.distributed_port,
+            )
+            nnodes = int(os.environ.get("SLURM_NNODES"))
+            ntasks_per_node = os.environ.get("SLURM_NTASKS_PER_NODE")
+            if ntasks_per_node is not None:
+                ntasks_per_node = int(ntasks_per_node)
+            else:
+                ntasks = int(os.environ.get("SLURM_NTASKS"))
+                nnodes = int(os.environ.get("SLURM_NNODES"))
+                assert ntasks % nnodes == 0
+                ntasks_per_node = int(ntasks / nnodes)
+            if ntasks_per_node == 1:
+                gpus_per_node = torch.cuda.device_count()
+                node_id = int(os.environ.get("SLURM_NODEID"))
+                cfg.distributed_rank = node_id * gpus_per_node
+                cfg.distributed_world_size = nnodes * gpus_per_node
+            elif cfg.pipeline_model_parallel:
+                assert ntasks_per_node == num_pipelines_per_node, (
+                    "SLURM --ntasks-per-node must match number of pipelines per "
+                    "node (={})".format(num_pipelines_per_node)
+                )
+                cfg.distributed_no_spawn = True
+                # For 4-way MP on nodes with 8 GPUs, ranks will be [0, 1] on
+                # the first node, [1, 2] on the second node, etc. This
+                # matches torch.distributed.launch.
+                node_id = int(os.environ.get("SLURM_NODEID"))
+                local_id = int(os.environ.get("SLURM_LOCALID"))
+                cfg.distributed_rank = node_id * num_pipelines_per_node + local_id
+                # In the above example, device_id will always be in [0, 1],
+                # which also matches torch.distributed.launch.
+                cfg.device_id = local_id
+                # We also want to set distributed_world_size to be the total
+                # number of pipelines across all nodes.
+                cfg.distributed_world_size = nnodes * num_pipelines_per_node
+            else:
+                assert ntasks_per_node == cfg.distributed_world_size // nnodes
+                cfg.distributed_no_spawn = True
+                cfg.distributed_rank = int(os.environ.get("SLURM_PROCID"))
+                cfg.device_id = int(os.environ.get("SLURM_LOCALID"))
+        except subprocess.CalledProcessError as e:  # scontrol failed
+            raise e
+        except FileNotFoundError:  # Slurm is not installed
+            pass
+
+
+def _infer_single_node_init(cfg: DistributedTrainingConfig):
+    assert (
+        cfg.distributed_world_size <= torch.cuda.device_count()
+    ), f"world size is {cfg.distributed_world_size} but have {torch.cuda.device_count()} available devices"
+    port = random.randint(10000, 20000)
+    cfg.distributed_init_method = "tcp://localhost:{port}".format(port=port)
+
+
+def _pipeline_parallel_pre_init(cfg: DistributedTrainingConfig):
+    from fairseq import utils
+
+    balance_exists = (
+        cfg.pipeline_balance is not None
+        or cfg.pipeline_encoder_balance is not None
+        or cfg.pipeline_decoder_balance is not None
+    )
+    devices_exist = (
+        cfg.pipeline_devices is not None
+        or cfg.pipeline_encoder_devices is not None
+        or cfg.pipeline_decoder_devices is not None
+    )
+    if not balance_exists:
+        raise ValueError(
+            "--pipeline-balance is currently required for pipeline model parallelism"
+        )
+    if not devices_exist:
+        raise ValueError(
+            "--pipeline-devices is currently required for pipeline model parallelism"
+        )
+
+    cfg.pipeline_balance = utils.eval_str_list(cfg.pipeline_balance, type=int)
+    if cfg.pipeline_devices is not None:
+        cfg.pipeline_devices = utils.eval_str_list(cfg.pipeline_devices, type=int)
+        num_pipeline_devices = len(set(cfg.pipeline_devices))
+    else:
+        cfg.pipeline_encoder_devices = utils.eval_str_list(
+            cfg.pipeline_encoder_devices, type=int
+        )
+        cfg.pipeline_decoder_devices = utils.eval_str_list(
+            cfg.pipeline_decoder_devices, type=int
+        )
+        num_pipeline_devices = len(
+            set(cfg.pipeline_encoder_devices + cfg.pipeline_decoder_devices)
+        )
+    gpus_per_node = torch.cuda.device_count()
+    assert (
+        gpus_per_node >= num_pipeline_devices
+        and gpus_per_node % num_pipeline_devices == 0
+    ), (
+        "the number of unique device IDs in --pipeline-devices must evenly divide "
+        "the number of GPUs per node (multi-node pipelining is not yet supported)"
+    )
+    num_pipelines_per_node = gpus_per_node // num_pipeline_devices
+    return num_pipeline_devices, num_pipelines_per_node
+
+
+def _pipeline_parallel_post_init(
+    cfg: DistributedTrainingConfig, num_pipeline_devices, num_pipelines_per_node
+):
+    if not cfg.distributed_no_spawn:
+        # When distributed_no_spawn is False, we expect distributed_rank and
+        # distributed_world_size to be based on the total number of GPUs, so
+        # we need to correct them to be based on the number of pipelines.
+        assert cfg.distributed_world_size % num_pipeline_devices == 0
+        cfg.distributed_world_size = (
+            cfg.distributed_world_size // num_pipeline_devices
+        )
+        # In the case of 4-way MP on nodes with 8 GPUs, we want
+        # distributed_rank to be the starting GPU index for each pipeline
+        # i.e., 0, 2, ...
+        gpus_per_node = torch.cuda.device_count()
+        assert cfg.distributed_rank % gpus_per_node == 0
+        assert cfg.distributed_rank % num_pipeline_devices == 0
+
+        with open_dict(cfg):
+            cfg.distributed_rank = cfg.distributed_rank // num_pipeline_devices
+            # launch one process per pipeline
+            cfg.distributed_num_procs = num_pipelines_per_node
+
+    # if we have 4-way MP on a node with 8 GPUs, we want device_ids to be 0
+    # and 4, indicating the starting device IDs for each pipeline
+    cfg.device_id *= num_pipeline_devices
+
+    if cfg.device_id > 0:
+        # if there's multiple pipelines on a node (e.g., 4-way MP on an 8
+        # GPU node), we need to adjust pipeline_devices accordingly
+        logger.debug(
+            "setting CUDA device={} on rank {}".format(
+                cfg.device_id, cfg.distributed_rank
+            )
+        )
+        torch.cuda.set_device(cfg.device_id)
+        with open_dict(cfg):
+            cfg.pipeline_devices = [cfg.device_id + d for d in cfg.pipeline_devices]
+        logger.info(
+            "setting pipeline_devices={} on rank {}".format(
+                cfg.pipeline_devices, cfg.distributed_rank
+            )
+        )
 
 
 def distributed_init(cfg: FairseqConfig):
@@ -320,6 +346,7 @@ def call_main(cfg: FairseqConfig, main, **kwargs):
                     torch.cuda.device_count(),
                     cfg.distributed_training.distributed_world_size,
                 ),
+                join=True,
             )
         else:
             distributed_main(cfg.distributed_training.device_id, main, cfg, kwargs)
@@ -381,8 +408,10 @@ def get_world_size(group):
         assert group[0] == "tpu"
         my_group = _find_my_group(group[1])
         return len(my_group)
-    else:
+    elif torch.distributed.is_initialized():
         return dist.get_world_size(group=group)
+    else:
+        return 1
 
 
 def get_global_group():
@@ -421,6 +450,7 @@ def get_data_parallel_group():
     global _USE_MEGATRON
     if _USE_MEGATRON:
         from fairseq.model_parallel.megatron import mpu
+
         return mpu.get_data_parallel_group()
     else:
         return get_global_group()
@@ -440,6 +470,7 @@ def get_model_parallel_group():
     global _USE_MEGATRON
     if _USE_MEGATRON:
         from fairseq.model_parallel.megatron import mpu
+
         return mpu.get_model_parallel_group()
     else:
         return None
@@ -528,7 +559,8 @@ def all_gather_list(data, group=None, max_size=16384):
     """Gathers arbitrary data from all nodes into a list.
 
     Similar to :func:`~torch.distributed.all_gather` but for arbitrary Python
-    data. Note that *data* must be picklable.
+    data. Note that *data* must be picklable and any CUDA tensors will be moved
+    to CPU and returned on CPU as well.
 
     Args:
         data (Any): data from the local worker to be gathered on other workers
@@ -536,6 +568,8 @@ def all_gather_list(data, group=None, max_size=16384):
         max_size (int, optional): maximum size of the data to be gathered
             across workers
     """
+    from fairseq import utils
+
     if group is None:
         group = get_global_group()
     rank = get_rank(group=group)
@@ -590,7 +624,7 @@ def all_gather_list(data, group=None, max_size=16384):
             "sync if one of them runs out of memory, or if there are other conditions "
             "in your training script that can cause one worker to finish an epoch "
             "while other workers are still iterating over their portions of the data. "
-            "Try rerunning with --ddp-backend=no_c10d and see if that helps."
+            "Try rerunning with --ddp-backend=legacy_ddp and see if that helps."
         )
 
 
@@ -643,18 +677,15 @@ def all_reduce_dict(data: Mapping[str, Any], device, group) -> Dict[str, Any]:
     return OrderedDict([(key, get_from_stack(key)) for key in data_keys])
 
 
-# From fairscale/optim/utils.py
-def broadcast_object(
-    obj: Any,
+def broadcast_tensors(
+    tensors: Optional[List[torch.Tensor]],
     src_rank: int,
     group: object,
     dist_device: Optional[torch.device] = None,
-    dist_length_dtype: Optional[torch.dtype] = torch.long,
-    dist_dtype: Optional[torch.dtype] = torch.uint8,
-) -> Any:
+) -> List[torch.Tensor]:
     """
-    Either broadcast from master to the fleet (default),
-    or use the src setting as the original rank.
+    Broadcasts a list of tensors without other (non-src) ranks needing to know
+    the dtypes/shapes of the tensors.
     """
     if dist_device is None:
         if torch.distributed.get_backend(group) == "nccl":
@@ -662,25 +693,111 @@ def broadcast_object(
         else:
             dist_device = torch.device("cpu")
 
+    # share metadata first to simplify transfer
+    is_src_rank = (get_rank(group) == src_rank)
+    if is_src_rank:
+        metadata = [
+            {"size": t.size(), "dtype": t.dtype, "device": t.device} for t in tensors
+        ]
+        metadata = _broadcast_object_slow(metadata, src_rank, group, dist_device)
+    else:
+        metadata = _broadcast_object_slow(None, src_rank, group, dist_device)
+
+    out_tensors = []
+    for i, meta in enumerate(metadata):
+        if is_src_rank:
+            tensor = tensors[i]
+            broadcast(tensors[i].to(dist_device), src=src_rank, group=group)
+        else:
+            tensor = torch.zeros(
+                [meta["size"].numel()], dtype=meta["dtype"], device=dist_device
+            )
+            broadcast(tensor, src=src_rank, group=group)
+        tensor = tensor.view(meta["size"]).to(meta["device"])
+        out_tensors.append(tensor)
+    return out_tensors
+
+
+def broadcast_object(
+    obj: Any,
+    src_rank: int,
+    group: object,
+    dist_device: Optional[torch.device] = None,
+) -> Any:
+    """Broadcast an arbitrary Python object to other workers."""
+    if dist_device is None:
+        if torch.distributed.get_backend(group) == "nccl":
+            dist_device = torch.device("cuda")
+        else:
+            dist_device = torch.device("cpu")
+
+    if get_rank(group) == src_rank:
+        # split the tensors from the non-tensors so we can broadcast them
+        # directly, avoiding unnecessary serialization/deserialization
+        tensors = []
+        obj = _split_tensors_from_obj(obj, tensors)
+        obj = _broadcast_object_slow(obj, src_rank, group, dist_device)
+        tensors = broadcast_tensors(tensors, src_rank, group, dist_device)
+    else:
+        obj = _broadcast_object_slow(None, src_rank, group, dist_device)
+        tensors = broadcast_tensors(None, src_rank, group, dist_device)
+    return _put_tensors_in_obj(obj, tensors)
+
+
+def _broadcast_object_slow(
+    obj: Any, src_rank: int, group: object, dist_device: torch.device,
+) -> Any:
     if get_rank(group) == src_rank:
         # Emit data
         buffer = io.BytesIO()
         torch.save(obj, buffer)
-        data = bytearray(buffer.getbuffer())
-        length_tensor = torch.tensor(
-            [len(data)], dtype=dist_length_dtype, device=dist_device
-        )
-        broadcast(length_tensor, src=src_rank, group=group)
-        data_send_tensor = torch.tensor(data, dtype=dist_dtype, device=dist_device)
-        broadcast(data_send_tensor, src=src_rank, group=group)
+        buffer = torch.ByteTensor(buffer.getbuffer()).to(dist_device)
+        length = torch.LongTensor([len(buffer)]).to(dist_device)
+        broadcast(length, src=src_rank, group=group)
+        broadcast(buffer, src=src_rank, group=group)
     else:
         # Fetch from the source
-        length_tensor = torch.tensor([0], dtype=dist_length_dtype, device=dist_device)
-        broadcast(length_tensor, src=src_rank, group=group)
-        data_recv_tensor = torch.zeros(
-            [int(length_tensor.item())], dtype=dist_dtype, device=dist_device
-        )
-        broadcast(data_recv_tensor, src=src_rank, group=group)
-        buffer = io.BytesIO(data_recv_tensor.cpu().numpy())
+        length = torch.LongTensor([0]).to(dist_device)
+        broadcast(length, src=src_rank, group=group)
+        buffer = torch.ByteTensor(int(length.item())).to(dist_device)
+        broadcast(buffer, src=src_rank, group=group)
+        buffer = io.BytesIO(buffer.cpu().numpy())
         obj = torch.load(buffer, map_location="cpu")
     return obj
+
+
+@dataclass(frozen=True)
+class _TensorPlaceholder:
+    index: int
+
+
+def _split_tensors_from_obj(obj: Any, tensors: List[torch.Tensor]) -> Any:
+    if torch.is_tensor(obj):
+        placeholder = _TensorPlaceholder(index=len(tensors))
+        tensors.append(obj)
+        return placeholder
+    elif isinstance(obj, dict):
+        return {k: _split_tensors_from_obj(v, tensors) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [_split_tensors_from_obj(v, tensors) for v in obj]
+    elif isinstance(obj, tuple):
+        return tuple(_split_tensors_from_obj(v, tensors) for v in obj)
+    elif isinstance(obj, set):
+        return {_split_tensors_from_obj(v, tensors) for v in obj}
+    else:
+        return obj
+
+
+def _put_tensors_in_obj(obj: Any, tensors: List[torch.Tensor]) -> Any:
+    if isinstance(obj, _TensorPlaceholder):
+        return tensors[obj.index]
+    elif isinstance(obj, dict):
+        return {k: _put_tensors_in_obj(v, tensors) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [_put_tensors_in_obj(v, tensors) for v in obj]
+    elif isinstance(obj, tuple):
+        return tuple(_put_tensors_in_obj(v, tensors) for v in obj)
+    elif isinstance(obj, set):
+        return {_put_tensors_in_obj(v, tensors) for v in obj}
+    else:
+        return obj

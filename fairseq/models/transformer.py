@@ -71,6 +71,13 @@ class TransformerModel(FairseqEncoderDecoderModel):
                 'bpe': 'fastbpe',
             }
 
+        def spm(path):
+            return {
+                'path': path,
+                'bpe': 'sentencepiece',
+                'tokenizer': 'space',
+            }
+
         return {
             'transformer.wmt14.en-fr': moses_subword('https://dl.fbaipublicfiles.com/fairseq/models/wmt14.en-fr.joined-dict.transformer.tar.bz2'),
             'transformer.wmt16.en-de': 'https://dl.fbaipublicfiles.com/fairseq/models/wmt16.en-de.joined-dict.transformer.tar.bz2',
@@ -83,6 +90,12 @@ class TransformerModel(FairseqEncoderDecoderModel):
             'transformer.wmt19.en-ru.single_model': moses_fastbpe('https://dl.fbaipublicfiles.com/fairseq/models/wmt19.en-ru.single_model.tar.gz'),
             'transformer.wmt19.de-en.single_model': moses_fastbpe('https://dl.fbaipublicfiles.com/fairseq/models/wmt19.de-en.joined-dict.single_model.tar.gz'),
             'transformer.wmt19.ru-en.single_model': moses_fastbpe('https://dl.fbaipublicfiles.com/fairseq/models/wmt19.ru-en.single_model.tar.gz'),
+            'transformer.wmt20.en-ta': spm('https://dl.fbaipublicfiles.com/fairseq/models/wmt20.en-ta.single.tar.gz'),
+            'transformer.wmt20.en-iu.news': spm('https://dl.fbaipublicfiles.com/fairseq/models/wmt20.en-iu.news.single.tar.gz'),
+            'transformer.wmt20.en-iu.nh': spm('https://dl.fbaipublicfiles.com/fairseq/models/wmt20.en-iu.nh.single.tar.gz'),
+            'transformer.wmt20.ta-en': spm('https://dl.fbaipublicfiles.com/fairseq/models/wmt20.ta-en.single.tar.gz'),
+            'transformer.wmt20.iu-en.news': spm('https://dl.fbaipublicfiles.com/fairseq/models/wmt20.iu-en.news.single.tar.gz'),
+            'transformer.wmt20.iu-en.nh': spm('https://dl.fbaipublicfiles.com/fairseq/models/wmt20.iu-en.nh.single.tar.gz'),
         }
         # fmt: on
 
@@ -154,6 +167,8 @@ class TransformerModel(FairseqEncoderDecoderModel):
         parser.add_argument('--checkpoint-activations', action='store_true',
                             help='checkpoint activations at each layer, which saves GPU '
                                  'memory usage at the cost of some additional compute')
+        parser.add_argument('--offload-activations', action='store_true',
+                            help='checkpoint activations at each layer, then save to gpu. Sets --checkpoint-activations.')
         # args for "Cross+Self-Attention for Transformer Models" (Peitz et al., 2019)
         parser.add_argument('--no-cross-attention', default=False, action='store_true',
                             help='do not perform cross-attention')
@@ -221,7 +236,8 @@ class TransformerModel(FairseqEncoderDecoderModel):
             decoder_embed_tokens = cls.build_embedding(
                 args, tgt_dict, args.decoder_embed_dim, args.decoder_embed_path
             )
-
+        if getattr(args, "offload_activations", False):
+            args.checkpoint_activations = True  # offloading implies checkpointing
         encoder = cls.build_encoder(args, src_dict, encoder_embed_tokens)
         decoder = cls.build_decoder(args, tgt_dict, decoder_embed_tokens)
         return cls(args, encoder, decoder)
@@ -367,7 +383,8 @@ class TransformerEncoder(FairseqEncoder):
     def build_encoder_layer(self, args):
         layer = TransformerEncoderLayer(args)
         if getattr(args, "checkpoint_activations", False):
-            layer = checkpoint_wrapper(layer)
+            offload_to_cpu = getattr(args, "offload_activations", False)
+            layer = checkpoint_wrapper(layer, offload_to_cpu=offload_to_cpu)
         return layer
 
     def forward_embedding(
@@ -389,7 +406,7 @@ class TransformerEncoder(FairseqEncoder):
     def forward(
         self,
         src_tokens,
-        src_lengths,
+        src_lengths: Optional[torch.Tensor] = None,
         return_all_hiddens: bool = False,
         token_embeddings: Optional[torch.Tensor] = None,
     ):
@@ -405,7 +422,7 @@ class TransformerEncoder(FairseqEncoder):
                 default `None` will recompute embeddings
 
         Returns:
-            namedtuple:
+            dict:
                 - **encoder_out** (Tensor): the last encoder layer's output of
                   shape `(src_len, batch, embed_dim)`
                 - **encoder_padding_mask** (ByteTensor): the positions of
@@ -657,7 +674,8 @@ class TransformerDecoder(FairseqIncrementalDecoder):
     def build_decoder_layer(self, args, no_encoder_attn=False):
         layer = TransformerDecoderLayer(args, no_encoder_attn)
         if getattr(args, "checkpoint_activations", False):
-            layer = checkpoint_wrapper(layer)
+            offload_to_cpu = getattr(args, "offload_activations", False)
+            layer = checkpoint_wrapper(layer, offload_to_cpu=offload_to_cpu)
         return layer
 
     def forward(
@@ -934,6 +952,17 @@ def Linear(in_features, out_features, bias=True):
     return m
 
 
+@register_model_architecture("transformer", "transformer_tiny")
+def tiny_architecture(args):
+    args.encoder_embed_dim = getattr(args, "encoder_embed_dim", 64)
+    args.encoder_ffn_embed_dim = getattr(args, "encoder_ffn_embed_dim", 64)
+    args.encoder_layers = getattr(args, "encoder_layers", 2)
+    args.encoder_attention_heads = getattr(args, "encoder_attention_heads", 2)
+    args.decoder_layers = getattr(args, "decoder_layers", 2)
+    args.decoder_attention_heads = getattr(args, "decoder_attention_heads", 2)
+    return base_architecture(args)
+
+
 @register_model_architecture("transformer", "transformer")
 def base_architecture(args):
     args.encoder_embed_path = getattr(args, "encoder_embed_path", None)
@@ -978,7 +1007,9 @@ def base_architecture(args):
     args.layernorm_embedding = getattr(args, "layernorm_embedding", False)
     args.tie_adaptive_weights = getattr(args, "tie_adaptive_weights", False)
     args.checkpoint_activations = getattr(args, "checkpoint_activations", False)
-
+    args.offload_activations = getattr(args, "offload_activations", False)
+    if args.offload_activations:
+        args.checkpoint_activations = True
     args.encoder_layers_to_keep = getattr(args, "encoder_layers_to_keep", None)
     args.decoder_layers_to_keep = getattr(args, "decoder_layers_to_keep", None)
     args.encoder_layerdrop = getattr(args, "encoder_layerdrop", 0)

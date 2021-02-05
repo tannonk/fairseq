@@ -154,7 +154,7 @@ class FairseqTask(object):
                 )
             logger.warning(
                 (
-                    "{} samples have invalid sizes and will be skipped, "
+                    "{:,} samples have invalid sizes and will be skipped, "
                     "max_positions={}, first few sample ids={}"
                 ).format(len(ignored), max_positions, ignored[:10])
             )
@@ -280,8 +280,6 @@ class FairseqTask(object):
         from fairseq import models, quantization_utils
 
         model = models.build_model(cfg, self)
-        if getattr(cfg, "tpu", False):
-            model.prepare_for_tpu_()
         model = quantization_utils.quantize_model_scalar(model, cfg)
         return model
 
@@ -376,12 +374,14 @@ class FairseqTask(object):
         else:
             search_strategy = search.BeamSearch(self.target_dictionary)
 
+        extra_gen_cls_kwargs = extra_gen_cls_kwargs or {}
         if seq_gen_cls is None:
             if getattr(args, "print_alignment", False):
                 seq_gen_cls = SequenceGeneratorWithAlignment
+                extra_gen_cls_kwargs["print_alignment"] = args.print_alignment
             else:
                 seq_gen_cls = SequenceGenerator
-        extra_gen_cls_kwargs = extra_gen_cls_kwargs or {}
+
         return seq_gen_cls(
             models,
             self.target_dictionary,
@@ -437,6 +437,9 @@ class FairseqTask(object):
         with torch.no_grad():
             loss, sample_size, logging_output = criterion(model, sample)
         return loss, sample_size, logging_output
+
+    def optimizer_step(self, optimizer, model, update_num):
+        optimizer.step()
 
     def build_dataset_for_inference(
         self, src_tokens: List[torch.Tensor], src_lengths: List[int], **kwargs
@@ -529,6 +532,16 @@ class FairseqTask(object):
         """Build the tokenizer for this task."""
         return encoders.build_bpe(args)
 
+    def get_interactive_tokens_and_lengths(self, lines, encode_fn):
+        tokens = [
+            self.source_dictionary.encode_line(
+                encode_fn(src_str), add_if_not_exist=False
+            ).long()
+            for src_str in lines
+        ]
+        lengths = [t.numel() for t in tokens]
+        return tokens, lengths
+
 
 class LegacyFairseqTask(FairseqTask):
     def __init__(self, args: Namespace):
@@ -562,8 +575,6 @@ class LegacyFairseqTask(FairseqTask):
         from fairseq import models, quantization_utils
 
         model = models.build_model(args, self)
-        if getattr(args, "tpu", False):
-            model.prepare_for_tpu_()
         model = quantization_utils.quantize_model_scalar(model, args)
         return model
 
