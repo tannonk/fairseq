@@ -831,6 +831,14 @@ class GenerationConfig(FairseqDataclass):
         metadata={"help": "if set, dont use seed for initializing random generators"},
     )
 
+    # edit for rrgen: print attention matrices when decoding
+    print_attention_matrices: Optional[str] = field(
+        default=None,
+        metadata={"help": "specify additional output file for attention matrices to be written too during decoding"}
+    )
+        # , metavar="STR", default=None, type=str,
+                    #    help="file path for writing attention matrices to")
+    
 
 @dataclass
 class CommonEvalConfig(FairseqDataclass):

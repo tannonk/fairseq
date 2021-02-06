@@ -28,6 +28,7 @@ def main(cfg: DictConfig):
 
     if isinstance(cfg, Namespace):
         cfg = convert_namespace_to_omegaconf(cfg)
+        # breakpoint()
 
     assert cfg.common_eval.path is not None, "--path required for generation!"
     assert (
@@ -178,6 +179,11 @@ def _main(cfg: DictConfig, output_file):
     tokenizer = task.build_tokenizer(cfg.tokenizer)
     bpe = task.build_bpe(cfg.bpe)
 
+    # open file for attention matrices
+    if cfg.generation.print_attention_matrices:
+        attn_file = open(cfg.generation.print_attention_matrices, 'w+', encoding='utf8')
+        logger.info(f"created file for attention matrices {cfg.generation.print_attention_matrices}")
+
     def decode_fn(x):
         if bpe is not None:
             x = bpe.decode(x)
@@ -217,6 +223,8 @@ def _main(cfg: DictConfig, output_file):
         )
         num_generated_tokens = sum(len(h[0]["tokens"]) for h in hypos)
         gen_timer.stop(num_generated_tokens)
+
+        # breakpoint()
 
         for i, sample_id in enumerate(sample["id"].tolist()):
             has_target = sample["target"] is not None
@@ -280,6 +288,9 @@ def _main(cfg: DictConfig, output_file):
                     extra_symbols_to_ignore=get_symbols_to_strip_from_output(generator),
                 )
                 detok_hypo_str = decode_fn(hypo_str)
+                
+                # breakpoint()
+
                 if not cfg.common_eval.quiet:
                     score = hypo["score"] / math.log(2)  # convert to base 2
                     # original hypothesis (after tokenization and BPE)
@@ -326,10 +337,7 @@ def _main(cfg: DictConfig, output_file):
                             "A-{}\t{}".format(
                                 sample_id,
                                 " ".join(
-                                    [
-                                        ",".join(src_probs)
-                                        for src_probs in alignment
-                                    ]
+                                    [",".join(src_probs) for src_probs in alignment]
                                 ),
                             ),
                             file=output_file,
@@ -356,6 +364,17 @@ def _main(cfg: DictConfig, output_file):
                                 file=output_file,
                             )
 
+                    # EDIT (tkew): write attention matrices
+                    # to output file
+                    if cfg.generation.print_attention_matrices and hypo["attention"] is not None:
+                        attention_matrix = hypo["attention"].detach().cpu().numpy()
+                        # flatten to [[...], [...], [...]]
+                        # for printing
+                        attention_matrix = attention_matrix.tolist()
+                        attn_file.write(
+                            "M-{}\t{}\t{}\t{}\n".format(sample_id, str(attention_matrix), src_str, hypo_str)
+                        )
+
                 # Score only the top hypothesis
                 if has_target and j == 0:
                     if align_dict is not None or cfg.common_eval.post_process is not None:
@@ -376,6 +395,11 @@ def _main(cfg: DictConfig, output_file):
         num_sentences += (
             sample["nsentences"] if "nsentences" in sample else sample["id"].numel()
         )
+
+    # close attention matrices file if opened
+    if cfg.generation.print_attention_matrices:
+        attn_file.close()
+        logger.info(f"attention matrices written to {cfg.generation.print_attention_matrices}")
 
     logger.info("NOTE: hypothesis and token scores are output in base 2")
     logger.info(
