@@ -236,13 +236,14 @@ class LexicallyConstrainedBeamSearch(Search):
     @torch.jit.export
     def init_constraints(self, batch_constraints: Optional[Tensor], beam_size: int):
         self.constraint_states = []
-        for constraint_tensor in batch_constraints:
-            if self.representation == "ordered":
-                constraint_state = OrderedConstraintState.create(constraint_tensor)
-            elif self.representation == "unordered":
-                constraint_state = UnorderedConstraintState.create(constraint_tensor)
+        if batch_constraints is not None: # EDIT: (tkew) allow for instances with no constraints set
+            for constraint_tensor in batch_constraints:
+                if self.representation == "ordered":
+                    constraint_state = OrderedConstraintState.create(constraint_tensor)
+                elif self.representation == "unordered":
+                    constraint_state = UnorderedConstraintState.create(constraint_tensor)
 
-            self.constraint_states.append([constraint_state for i in range(beam_size)])
+                self.constraint_states.append([constraint_state for i in range(beam_size)])
 
     @torch.jit.export
     def prune_sentences(self, batch_idxs: Tensor):

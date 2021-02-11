@@ -771,7 +771,11 @@ class RRGenLSTMDecoder(FairseqIncrementalDecoder):
             x = self.additional_fc(x)
             x = self.dropout_out_module(x)
         # srclen x tgtlen x bsz -> bsz x tgtlen x srclen
-        if not self.training and self.need_attn and self.attention is not None:
+        # HACK: hardcode self.need_attn to True
+        # TODO: find out why self.need_attn reverts to None, when it is initialised as True in decoder init method
+        # self.need_attn = True
+        #if not self.training and self.need_attn and self.attention is not None:
+        if not self.training and self.attention is not None:
             assert attn_scores is not None
             attn_scores = attn_scores.transpose(0, 2)
         else:
