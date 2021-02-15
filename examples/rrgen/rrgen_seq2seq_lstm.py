@@ -580,14 +580,21 @@ class RRGenLSTMDecoder(FairseqIncrementalDecoder):
         Modified to accept A-Components
 
         """
+
+        # breakpoint()
+
         # get outputs from encoder
         if encoder_out is not None:
-            # torch.Size([max_src_len, bsz, hidden_size])
+            # torch.Size([srclen, bsz, hidden_size])
             encoder_outs = encoder_out[0]
-            # torch.Size([1, bsz, hidden_size])
-            encoder_hiddens = encoder_out[1]
-            encoder_cells = encoder_out[2]  # torch.Size([1, bsz, hidden_size])
-            # torch.Size([max_src_len, bsz])
+            
+            # final_hiddens -> torch.Size([num_layers, bsz, hidden_size])
+            encoder_hiddens = encoder_out[1] 
+            
+            # final_cells -> torch.Size([num_layers, bsz, hidden_size])
+            encoder_cells = encoder_out[2]
+            
+            # torch.Size([srclen, bsz])
             encoder_padding_mask = encoder_out[3]
         else:
             encoder_outs = torch.empty(0)
@@ -653,7 +660,7 @@ class RRGenLSTMDecoder(FairseqIncrementalDecoder):
             prev_hiddens = [encoder_hiddens[i] for i in range(self.num_layers)]
             prev_cells = [encoder_cells[i] for i in range(self.num_layers)]
             
-            # project oncoder output dimensions to decoder
+            # project encoder output dimensions to decoder
             # hidden size (if different)
             if self.encoder_hidden_proj is not None:
                 prev_hiddens = [self.encoder_hidden_proj(y) for y in prev_hiddens]
