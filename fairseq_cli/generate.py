@@ -5,6 +5,11 @@
 # LICENSE file in the root directory of this source tree.
 """
 Translate pre-processed data with a trained model.
+
+Modifications:
+    - output file includes additional line for source
+    factors, e.g. token-level sentiment labels
+    
 """
 
 import ast
@@ -89,6 +94,8 @@ def _main(cfg: DictConfig, output_file):
     except NotImplementedError:
         src_dict = None
     tgt_dict = task.target_dictionary
+
+    src_factor_dict = getattr(task, "source_factor_dictionary", None)
 
     overrides = ast.literal_eval(cfg.common_eval.model_overrides)
 
@@ -198,9 +205,8 @@ def _main(cfg: DictConfig, output_file):
     wps_meter = TimeMeter()
     for sample in progress:
 
-        # import pdb
-        # pdb.set_trace()
-
+        # breakpoint()
+        
         sample = utils.move_to_cuda(sample) if use_cuda else sample
         if "net_input" not in sample:
             continue
@@ -233,10 +239,18 @@ def _main(cfg: DictConfig, output_file):
             if "src_tokens" in sample["net_input"]:
                 src_tokens = utils.strip_pad(
                     sample["net_input"]["src_tokens"][i, :], tgt_dict.pad()
-                )
+                    )
             else:
                 src_tokens = None
 
+            src_factors = None
+            if "src_factors" in sample["net_input"]:
+                # get only item i from current batch and
+                # remove any padding tokens if they exist
+                src_factors = utils.strip_pad(
+                    sample["net_input"]["src_factors"][i, :], src_factor_dict.pad()
+                    )
+            
             target_tokens = None
             if has_target:
                 target_tokens = (
@@ -256,6 +270,12 @@ def _main(cfg: DictConfig, output_file):
                     src_str = src_dict.string(src_tokens, cfg.common_eval.post_process)
                 else:
                     src_str = ""
+                
+                if src_factor_dict is not None:
+                    src_factor_str = src_factor_dict.string(src_factors)
+                else:
+                    src_factor_str = ""
+                
                 if has_target:
                     target_str = tgt_dict.string(
                         target_tokens,
@@ -273,6 +293,8 @@ def _main(cfg: DictConfig, output_file):
             if not cfg.common_eval.quiet:
                 if src_dict is not None:
                     print("S-{}\t{}".format(sample_id, src_str), file=output_file)
+                if src_factor_dict is not None:
+                    print("F-{}\t{}".format(sample_id, src_factor_str), file=output_file)
                 if has_target:
                     print("T-{}\t{}".format(sample_id, target_str), file=output_file)
 
