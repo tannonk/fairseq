@@ -414,12 +414,21 @@ class FactorTranslationTask(FairseqTask):
             pad_to_multiple=self.cfg.required_seq_len_multiple,
         )
 
-    def build_dataset_for_inference(self, src_tokens, src_lengths, constraints=None):
-        return LanguagePairDataset(
+    def build_dataset_for_inference(self, src_tokens, src_lengths, src_factors=None, constraints=None):
+        # return LanguagePairDataset(
+        #     src_tokens,
+        #     src_lengths,
+        #     self.source_dictionary,
+        #     tgt_dict=self.target_dictionary,
+        #     constraints=constraints,
+        # )
+        return FactoredLanguagePairDataset(
             src_tokens,
             src_lengths,
             self.source_dictionary,
             tgt_dict=self.target_dictionary,
+            src_factor=src_factors,
+            src_factor_dict=self.source_factor_dictionary,
             constraints=constraints,
         )
 
