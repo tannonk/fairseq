@@ -463,12 +463,8 @@ class RRGenLSTMDecoder(FairseqIncrementalDecoder):
         # hidden_size (original hidden_size + size
         # of attributes)
         ext_feature_size = 0
-        if self.use_senti == 'sentiment':
-            ext_feature_size += 1
-        elif self.use_senti == 'alpha_sentiment':
-            # for alpha_seystems sentiment, we expect
-            # the sentiment attribute to be a 25d vector
-            ext_feature_size += 25
+        if self.use_senti:
+            ext_feature_size += 35
         if self.use_rate:
             ext_feature_size += 1
         if self.use_cate:

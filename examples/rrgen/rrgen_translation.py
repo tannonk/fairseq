@@ -168,13 +168,13 @@ def load_rrgen_dataset(
 
             logger.info(f'loaded {len(senti_dataset)} examples from {prefix + use_sentiment}')
 
-            if norm_senti:
-                if norm_senti == 'norm':
-                    senti_dataset = np.array([normalise_sentiment_vector_values(x) for x in senti_dataset])
-                elif norm_senti == 'maxabs':
-                    senti_dataset = np.array([maxabs_scale_sentiment_vector_values(x) for x in senti_dataset])
+            # if norm_senti:
+            #     if norm_senti == 'norm':
+            #         senti_dataset = np.array([normalise_sentiment_vector_values(x) for x in senti_dataset])
+            #     elif norm_senti == 'maxabs':
+            #         senti_dataset = np.array([maxabs_scale_sentiment_vector_values(x) for x in senti_dataset])
                 
-                logger.info(f'sentiment vectors normalised with {norm_senti}')
+            #     logger.info(f'sentiment vectors normalised with {norm_senti}')
             # if use_sentiment == 'alpha_sentiment' and dataset_impl == 'raw':
                 
             #     if not split_exists(split_k, src, tgt, use_sentiment, data_path) and not split_exists(split_k, tgt, src, use_sentiment, data_path):
