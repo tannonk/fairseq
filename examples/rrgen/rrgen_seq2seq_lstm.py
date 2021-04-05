@@ -465,6 +465,12 @@ class RRGenLSTMDecoder(FairseqIncrementalDecoder):
         ext_feature_size = 0
         if self.use_senti:
             ext_feature_size += 35
+        # if self.use_senti == 'sentiment':
+            # ext_feature_size += 1
+        # elif self.use_senti == 'alpha_sentiment':
+            # for alpha_seystems sentiment, we expect
+            # the sentiment attribute to be a 25d vector
+            # ext_feature_size += 25
         if self.use_rate:
             ext_feature_size += 1
         if self.use_cate:
@@ -475,31 +481,38 @@ class RRGenLSTMDecoder(FairseqIncrementalDecoder):
         # breakpoint()
         
         self.encoder_output_units = encoder_output_units
-        
         if encoder_output_units != hidden_size and encoder_output_units != 0:
             self.encoder_hidden_proj = Linear(encoder_output_units, hidden_size)
             self.encoder_cell_proj = Linear(encoder_output_units, hidden_size)
         else:
             self.encoder_hidden_proj = self.encoder_cell_proj = None
 
-        if ext_feature_size and self.combine_ext_features == 'mlp': # tk
-            # change projection layer defined above to
-            # appropriate size to include ext_feature attributes
-            # i.e. projects x from `encoder_output_units +
-            # ext_feature down` x' to `decoder hidden_size`
-            self.encoder_hidden_proj = Linear(
-                encoder_output_units + ext_feature_size, hidden_size)
-            self.encoder_cell_proj = Linear(
-                encoder_output_units + ext_feature_size, hidden_size)
+        # equivalent to Gao et al 2019 https://github.com/tannonk/RRGen/blob/785f4c65ddf17dbaf1787b6ca82db531f0133375/src/decoder.py#L86
+        # self.W_r = nn.Linear(input_size, self.hidden_size,
+        # bias=bias)
         
-        elif ext_feature_size and self.combine_ext_features == 'concat':
-            # Update decoder hidden size if we concatenate
-            # ext attribute features directly in decoder
-            hidden_size += ext_feature_size
-            self.hidden_size = hidden_size
-
+        if ext_feature_size: # tk
+            self.a_component_proj = Linear(hidden_size+ext_feature_size, hidden_size)
         else:
-            pass # leave it as is!
+            self.a_component_proj = None 
+
+        #     # change projection layer defined above to
+        #     # appropriate size to include ext_feature attributes
+        #     # i.e. projects x from `encoder_output_units +
+        #     # ext_feature down` x' to `decoder hidden_size`
+        #     self.encoder_hidden_proj = Linear(
+        #         encoder_output_units + ext_feature_size, hidden_size)
+        #     self.encoder_cell_proj = Linear(
+        #         encoder_output_units + ext_feature_size, hidden_size)
+        
+        # elif ext_feature_size and self.combine_ext_features == 'concat':
+        #     # Update decoder hidden size if we concatenate
+        #     # ext attribute features directly in decoder
+        #     hidden_size += ext_feature_size
+        #     self.hidden_size = hidden_size
+
+        # else:
+        #     pass # leave it as is!
 
         # disable input feeding if there is no encoder
         # input feeding is described in
@@ -623,36 +636,6 @@ class RRGenLSTMDecoder(FairseqIncrementalDecoder):
         elif encoder_out is not None:
             # setup recurrent cells
 
-            # extend encoder outputs with external attribute
-            # features before projecting to decode hidden size
-            if self.combine_ext_features == 'mlp':
-
-                if ext_senti is not None:
-                    encoder_hiddens = self.concatenate_ext_attributes_on_encoder_output_states(
-                        encoder_hiddens, ext_senti)
-                    encoder_cells = self.concatenate_ext_attributes_on_encoder_output_states(
-                        encoder_cells, ext_senti)
-
-                if ext_cate is not None:
-                    encoder_hiddens = self.concatenate_ext_attributes_on_encoder_output_states(
-                        encoder_hiddens, ext_cate)
-                    encoder_cells = self.concatenate_ext_attributes_on_encoder_output_states(
-                        encoder_cells, ext_cate)
-                
-                if ext_rate is not None:
-                    encoder_hiddens = self.concatenate_ext_attributes_on_encoder_output_states(
-                        encoder_hiddens, ext_rate)
-                    encoder_cells = self.concatenate_ext_attributes_on_encoder_output_states(
-                        encoder_cells, ext_rate)
-
-                if ext_len is not None:
-                    encoder_hiddens = self.concatenate_ext_attributes_on_encoder_output_states(
-                        encoder_hiddens, ext_len)
-                    encoder_cells = self.concatenate_ext_attributes_on_encoder_output_states(
-                        encoder_cells, ext_len)
-
-            # breakpoint()
-            
             prev_hiddens = [encoder_hiddens[i] for i in range(self.num_layers)]
             prev_cells = [encoder_cells[i] for i in range(self.num_layers)]
             
@@ -663,35 +646,6 @@ class RRGenLSTMDecoder(FairseqIncrementalDecoder):
                 prev_cells = [self.encoder_cell_proj(y) for y in prev_cells]
             input_feed = x.new_zeros(bsz, self.hidden_size)
         
-            # breakpoint()
-
-            if self.combine_ext_features == 'concat':
-
-                if ext_senti is not None:
-                    # print('!!! extended prev_hiddens[0]')
-                    prev_hiddens = self.concatenate_ext_attributes_on_previous_states(
-                        prev_hiddens, ext_senti)
-                    prev_cells = self.concatenate_ext_attributes_on_previous_states(
-                        prev_cells, ext_senti)
-
-                if ext_cate is not None:
-                    prev_hiddens = self.concatenate_ext_attributes_on_previous_states(
-                        prev_hiddens, ext_cate)
-                    prev_cells = self.concatenate_ext_attributes_on_previous_states(
-                        prev_cells, ext_cate)
-
-                if ext_rate is not None:
-                    prev_hiddens = self.concatenate_ext_attributes_on_previous_states(
-                        prev_hiddens, ext_rate)
-                    prev_cells = self.concatenate_ext_attributes_on_previous_states(
-                        prev_cells, ext_rate)
-
-                if ext_len is not None:
-                    prev_hiddens = self.concatenate_ext_attributes_on_previous_states(
-                        prev_hiddens, ext_len)
-                    prev_cells = self.concatenate_ext_attributes_on_previous_states(
-                        prev_cells, ext_len)
-        
         else:
             # setup zero cells, since there is no encoder
             zero_state = x.new_zeros(bsz, self.hidden_size)
@@ -699,6 +653,46 @@ class RRGenLSTMDecoder(FairseqIncrementalDecoder):
             prev_cells = [zero_state for i in range(self.num_layers)]
             input_feed = None
 
+        # breakpoint()
+        # extend encoder outputs with the external attributes
+        # features before projecting to decode hidden size
+        if not incremental_state and self.a_component_proj is not None:
+            if ext_senti is not None:
+                prev_hiddens = self.concatenate_ext_attributes_on_previous_states(
+                    prev_hiddens, ext_senti)
+                prev_cells = self.concatenate_ext_attributes_on_previous_states(
+                    prev_cells, ext_senti)
+
+            if ext_cate is not None:
+                prev_hiddens = self.concatenate_ext_attributes_on_previous_states(
+                    prev_hiddens, ext_cate)
+                prev_cells = self.concatenate_ext_attributes_on_previous_states(
+                    prev_cells, ext_cate)
+            
+            if ext_rate is not None:
+                prev_hiddens = self.concatenate_ext_attributes_on_previous_states(
+                    prev_hiddens, ext_rate)
+                prev_cells = self.concatenate_ext_attributes_on_previous_states(
+                    prev_cells, ext_rate)
+
+            if ext_len is not None:
+                prev_hiddens = self.concatenate_ext_attributes_on_previous_states(
+                    prev_hiddens, ext_len)
+                prev_cells = self.concatenate_ext_attributes_on_previous_states(
+                    prev_cells, ext_len)
+
+            if self.combine_ext_features == 'mlp':
+                # equivalent to Gao et al. https://github.com/tannonk/RRGen/blob/785f4c65ddf17dbaf1787b6ca82db531f0133375/src/decoder.py#L135
+                prev_hiddens = [torch.tanh(self.a_component_proj(prev_hidden)) for prev_hidden in prev_hiddens]
+                prev_cells = [torch.tanh(self.a_component_proj(prev_cell)) for prev_cell in prev_cells]                    
+
+            elif self.combine_ext_features == 'concat':
+            
+                prev_hiddens = [self.a_component_proj(prev_hidden) for prev_hidden in prev_hiddens]
+                prev_cells = [self.a_component_proj(prev_cell) for prev_cell in prev_cells]                    
+
+        # breakpoint()
+    
         # attention
         assert srclen > 0 or self.attention is None, \
             "attention is not supported if there are no encoder outputs"
