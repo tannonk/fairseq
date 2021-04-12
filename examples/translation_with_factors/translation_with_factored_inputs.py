@@ -80,10 +80,21 @@ def load_factored_langpair_dataset(
         else:
             if k > 0:
                 break
+
             else:
-                raise FileNotFoundError(
-                    "Dataset not found: {} ({})".format(split, data_path)
-                )
+                # ADDED HACK TO HELP REDIRECT PATH TO CUSTOM
+                # A SPECIFIC TARGET TEST SET, e.g. RE_TEST 
+                # (re:spondelligent test data subset).
+                # expects a file name like `test.review`
+                # with the relative path from the src and
+                # tgt dictionaries.
+                try:
+                    prefix = os.path.join(
+                        data_path, '{}.'.format(split_k))
+                    logger.info(f'[!] warning: using data from {prefix}*')
+                except:
+                    raise FileNotFoundError(
+                        'Dataset not found: {} ({})'.format(split, data_path))
 
         src_dataset = data_utils.load_indexed_dataset(
             prefix + src, src_dict, dataset_impl
@@ -94,14 +105,23 @@ def load_factored_langpair_dataset(
         src_factor_dataset = None
         if src_factor:
             # find test.sentiment_seq.sp-None.sentiment_seq.sp
-            assert split_exists(split_k, src_factor, 'None', src_factor, data_path)
-            src_factor_prefix = os.path.join(data_path, "{}.{}-{}.".format(split_k, src_factor, 'None'))
+            if split_exists(split_k, src_factor, 'None', src_factor, data_path):
+                src_factor_prefix = os.path.join(data_path, "{}.{}-{}.".format(split_k, src_factor, 'None'))
+            else:
+                try:
+                    src_factor_prefix = os.path.join(
+                        data_path, '{}.'.format(split_k))
+                    logger.info(f'[!] warning: using data from {src_factor_prefix}*')
+                except:
+                    raise FileNotFoundError(
+                        'Dataset not found: {} ({})'.format(split, data_path))
+
             # load in src factor dataset (similar as src_dataset)
             src_factor_dataset = data_utils.load_indexed_dataset(src_factor_prefix + src_factor, src_factor_dict, dataset_impl)
 
 
         if truncate_source:
-            raise NotImplementedError('if truncating source dataset, must also truncate src_factor_dataset')
+            # raise NotImplementedError('if truncating source dataset, must also truncate src_factor_dataset')
             src_dataset = AppendTokenDataset(
                 TruncateDataset(
                     StripTokenDataset(src_dataset, src_dict.eos()),
@@ -109,6 +129,15 @@ def load_factored_langpair_dataset(
                 ),
                 src_dict.eos(),
             )
+
+            src_factor_dataset = AppendTokenDataset(
+                TruncateDataset(
+                    StripTokenDataset(src_factor_dataset, src_factor_dict.eos()),
+                    max_source_positions - 1,
+                ),
+                src_factor_dict.eos(),
+            )
+            
         src_datasets.append(src_dataset)
         src_factor_datasets.append(src_factor_dataset)
 
@@ -291,7 +320,7 @@ class FactorTranslationConfig(FairseqDataclass):
         default=False, metadata={"help": "print sample generations during validation"}
     )
 
-    combine_source_factor: str = field(
+    source_factor_combine: str = field(
         default='sum', metadata={"help": "method for combining source factors with source word embeddings"}
         )
 

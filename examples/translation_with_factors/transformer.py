@@ -210,7 +210,6 @@ class TransformerModel(FairseqEncoderDecoderModel):
         # make sure all arguments are present in older models
         base_architecture(args)
 
-        # breakpoint()
 
         if args.encoder_layers_to_keep:
             args.encoder_layers = len(args.encoder_layers_to_keep.split(","))
@@ -225,8 +224,9 @@ class TransformerModel(FairseqEncoderDecoderModel):
         src_dict, tgt_dict, src_factor_dict = task.source_dictionary, task.target_dictionary, task.source_factor_dictionary
 
         # TODO: continue from here
+        # breakpoint()
 
-        if args.share_all_embeddings:
+        if args.share_all_embeddings and args.source_factor_combine != 'concat':
             if src_dict != tgt_dict:
                 raise ValueError("--share-all-embeddings requires a joined dictionary")
             if args.encoder_embed_dim != args.decoder_embed_dim:
@@ -244,6 +244,16 @@ class TransformerModel(FairseqEncoderDecoderModel):
             )
             decoder_embed_tokens = encoder_embed_tokens
             args.share_decoder_input_output_embed = True
+
+        elif args.share_all_embeddings and args.source_factor_combine == 'concat':
+            # assume original encoder embedding size matches
+            # decoder embedding size (i.e. trained with share_all_embeddings=True)
+            encoder_embed_tokens = cls.build_embedding(
+                args, src_dict, args.decoder_embed_dim, args.encoder_embed_path
+            )
+            decoder_embed_tokens = encoder_embed_tokens
+            args.share_decoder_input_output_embed = True
+
         else:
             encoder_embed_tokens = cls.build_embedding(
                 args, src_dict, args.encoder_embed_dim, args.encoder_embed_path
@@ -251,13 +261,15 @@ class TransformerModel(FairseqEncoderDecoderModel):
             decoder_embed_tokens = cls.build_embedding(
                 args, tgt_dict, args.decoder_embed_dim, args.decoder_embed_path
             )
+
         if getattr(args, "offload_activations", False):
             args.checkpoint_activations = True  # offloading implies checkpointing
         
-        # breakpoint()
         src_factor_embedding = None
         if src_factor_dict:
             src_factor_embedding = cls.build_embedding(args, src_factor_dict, args.source_factor_embed_dim, None)
+
+        # breakpoint()
 
         encoder = cls.build_encoder(args, src_dict, encoder_embed_tokens, src_factor_dict, src_factor_embedding)
         
@@ -437,8 +449,6 @@ class TransformerEncoder(FairseqEncoder):
 
     def combine_source_token_and_source_factor_embeddings(self, token_embedding: torch.Tensor, src_factor_embedding: torch.Tensor):
         
-        # breakpoint()
-
         if self.source_factor_combine == 'concat':
             return torch.cat([token_embedding, src_factor_embedding], axis=-1)
         elif self.source_factor_combine == 'sum':
@@ -461,7 +471,7 @@ class TransformerEncoder(FairseqEncoder):
     ):
 
         # breakpoint()
-
+        
         # embed tokens and positions
         if token_embedding is None:
             token_embedding = self.embed_tokens(src_tokens)
@@ -517,6 +527,29 @@ class TransformerEncoder(FairseqEncoder):
         x, encoder_embedding = self.forward_embedding(src_tokens, token_embeddings, src_factors)
 
         # breakpoint()
+
+        ###########################################
+        # saving embeddings for inspection
+        # breakpoint()
+        
+        # import json
+
+        # self.embed_factors
+        # json_obj = json.dumps(src_dict.indices)
+        # f = open("/srv/scratch2/kew/de_dict.json","w")
+        # f.write(json_obj)
+        # f.close()
+
+        # torch.save(self.embed_tokens.state_dict(), '/srv/scratch2/kew/word_embeddings_de.pt')
+
+        # json_obj = json.dumps(src_factor_dict.indices)
+        # f = open("/srv/scratch2/kew/de_fact_dict.json","w")
+        # f.write(json_obj)
+        # f.close()
+
+        # torch.save(self.embed_factors.state_dict(), '/srv/scratch2/kew/feature_embeddings_epochX_de.pt')
+        ###########################################
+
         
         # B x T x C -> T x B x C
         x = x.transpose(0, 1)

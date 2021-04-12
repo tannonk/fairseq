@@ -68,6 +68,8 @@ def load_langpair_dataset(
     for k in itertools.count():
         split_k = split + (str(k) if k > 0 else "")
 
+        # breakpoint()
+
         # infer langcode
         if split_exists(split_k, src, tgt, src, data_path):
             prefix = os.path.join(data_path, "{}.{}-{}.".format(split_k, src, tgt))
@@ -77,10 +79,20 @@ def load_langpair_dataset(
             if k > 0:
                 break
             else:
-                raise FileNotFoundError(
-                    "Dataset not found: {} ({})".format(split, data_path)
-                )
-
+                # ADDED HACK TO HELP REDIRECT PATH TO CUSTOM
+                # A SPECIFIC TARGET TEST SET, e.g. RE_TEST 
+                # (re:spondelligent test data subset).
+                # expects a file name like `test.review`
+                # with the relative path from the src and
+                # tgt dictionaries.
+                try:
+                    prefix = os.path.join(
+                        data_path, '{}.'.format(split_k))
+                    logger.info(f'[!] warning: using data from {prefix}*')
+                except:
+                    raise FileNotFoundError(
+                        'Dataset not found: {} ({})'.format(split, data_path))
+                        
         src_dataset = data_utils.load_indexed_dataset(
             prefix + src, src_dict, dataset_impl
         )

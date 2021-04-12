@@ -139,8 +139,8 @@ def main(args):
 
     # import pdb; pdb.set_trace()
 
-    # expects file of np arrays of size (1, 25)
-    if args.sent_ext == 'alpha_sentiment':
+    # expects file of np arrays of size (1, 35)
+    if args.sent_ext:
         
         # cp test.alpha_sentiment to test.review-response_rg.alpha_sentiment
         shutil.copy(
